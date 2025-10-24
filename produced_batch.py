@@ -185,10 +185,10 @@ def process_all_days(csv_path):
             plato_col = f'BBT {tank_num} Average Plato'
             level_col = f'BBT{tank_num} Level'
             material_col = f'BBT{tank_num} Material'
-            if plato_col in row.index and level_col in row.index:
+            if plato_col in row.index and level_col in row.index and material_col in row.index:
                 plato_val = float(row[plato_col])
                 level_val = float(row[level_col])
-                material_val = row[material_col] if material_col in row.index else 0
+                material_val = row[material_col]
                 hl_std_val = calc_hl_std(level_val, plato_val, material_val)
                 result_dict[f'BBT{tank_num} Level'] = level_val
                 result_dict[f'BBT{tank_num} Plato'] = plato_val
@@ -199,10 +199,10 @@ def process_all_days(csv_path):
             plato_col = f'FST {tank_num} Average Plato'
             level_col = f'FST{tank_num} Level '
             material_col = f'FST{tank_num} Material'
-            if plato_col in row.index and level_col in row.index:
+            if plato_col in row.index and level_col in row.index and material_col in row.index:
                 plato_val = float(row[plato_col])
                 level_val = float(row[level_col])
-                material_val = row[material_col] if material_col in row.index else 0
+                material_val = row[material_col]
                 hl_std_val = calc_hl_std(level_val, plato_val, material_val)
                 result_dict[f'FST{tank_num} Level'] = level_val
                 result_dict[f'FST{tank_num} Plato'] = plato_val
@@ -212,9 +212,9 @@ def process_all_days(csv_path):
         for tank_num in RBT_TANKS:
             plato_col = f'RBT {tank_num} Average Plato'
             material_col = f'RBT{tank_num} Material'
-            if plato_col in row.index:
+            if plato_col in row.index and material_col in row.index:
                 plato_val = float(row[plato_col])
-                material_val = row[material_col] if material_col in row.index else 0
+                material_val = row[material_col]
                 # Nota: RBT non ha Level nel CSV, solo Plato e Material
                 result_dict[f'RBT{tank_num} Plato'] = plato_val
                 result_dict[f'RBT{tank_num} Material'] = material_val
