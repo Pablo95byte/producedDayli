@@ -92,16 +92,13 @@ class ProducedCalculator:
         if grado_vol == 0:
             return 0
 
-        # Determina grado_std
-        if material == 0:
-            return 0  # Material 0 → ritorna 0
-
         # Material è valido, usa il mapping
         if material not in MATERIAL_MAPPING:
             raise ValueError(f"Material {material} non trovato nel mapping")
 
         grado_std = MATERIAL_MAPPING[material]
         if grado_std == 0:
+            # Material con grado_std = 0 nel mapping ritorna 0
             return 0
 
         hl_std = (volume_hl * grado_vol) / grado_std
