@@ -34,13 +34,36 @@ python3 produced_gui.py
   - Stock Iniziale/Finale
   - Delta Stock
 
-### 3️⃣ Tab "Grafici"
-*In sviluppo*
-- Produced giornaliero
-- Produced settimanale
-- Componenti stacked
-- Evoluzione stock
-- Tank specifico
+### 3️⃣ Tab "Grafici" ✓
+**Grafici matplotlib interattivi embedded:**
+
+- **Produced Giornaliero**: Grafico a barre con dati daily
+  - Barre colorate steelblue
+  - Asse X con date formattate
+  - Grid per leggibilità
+
+- **Produced Settimanale**: Aggregato per settimana
+  - Barre verdi con valori annotati sopra
+  - Etichette settimana (2025-W01, etc.)
+  - Totale hl per settimana
+
+- **Componenti Stacked**: Breakdown del Produced
+  - Packed (blu)
+  - Cisterne/2 (viola)
+  - Delta Stock/2 (arancione)
+  - Stacked per vedere contributo di ogni componente
+
+- **Evoluzione Stock**: Trend stock nel tempo
+  - Linea rossa: Stock Iniziale (marker ●)
+  - Linea verde: Stock Finale (marker ■)
+  - Area grigia tra le linee (fill_between)
+
+**Toolbar inclusa:**
+- 🏠 Home: Reset vista
+- ◀ Back / Forward ▶: Cronologia zoom
+- ✋ Pan: Sposta grafico
+- 🔍 Zoom: Zoom rettangolare
+- 💾 Save: Salva PNG
 
 ### 4️⃣ Tab "Report PDF"
 *Da completare*
@@ -70,9 +93,16 @@ python3 produced_gui.py
 
 ## 💻 Requisiti
 
+**Necessari:**
 - Python 3.7+
 - pandas
+- matplotlib
 - tkinter (incluso in Python)
+
+**Installazione dipendenze:**
+```bash
+pip install pandas matplotlib
+```
 
 **Opzionale per Excel export:**
 ```bash
@@ -149,11 +179,13 @@ pip install openpyxl
 
 ## 🚧 Sviluppo Futuro
 
-- [ ] Integrazione matplotlib per grafici
+- [x] ~~Integrazione matplotlib per grafici~~ ✓ **COMPLETATO**
 - [ ] Generazione PDF da GUI
 - [ ] Test formule interattivo
 - [ ] Filtri e ricerca nella tabella
-- [ ] Export grafico singolo
+- [ ] Export grafico singolo come PNG
+- [ ] Grafici per tank specifici (BBT, FST, RBT)
+- [ ] Comparazione settimane/mesi
 - [ ] Temi chiari/scuri
 - [ ] Multi-lingua (IT/EN)
 
