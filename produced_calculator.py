@@ -11,6 +11,7 @@ from colorama import Fore, Back, Style, init
 import os
 import sys
 from pathlib import Path
+from nan_handler import handle_missing_values
 
 init(autoreset=True)
 
@@ -57,14 +58,18 @@ class ProducedCalculator:
     def __init__(self, csv_path):
         """Inizializza il calcolatore con i dati dal CSV"""
         self.df = pd.read_csv(csv_path)
+        print(f"{Fore.GREEN}✓ Dati caricati: {len(self.df)} giorni{Style.RESET_ALL}")
+
+        # Gestione interattiva dei valori NaN
+        self.df = handle_missing_values(self.df)
+
         self.debug_mode = False
         self.current_row_idx = 0
-        print(f"{Fore.GREEN}✓ Dati caricati: {len(self.df)} giorni{Style.RESET_ALL}")
     
     @staticmethod
     def plato_to_volumetric(plato):
         """Converte gradi Plato a gradi volumetrici"""
-        if pd.isna(plato) or plato == '' or plato == 0:
+        if plato == 0:
             return 0
         plato = float(plato)
         grado_v = ((0.0000188792 * plato + 0.003646886) * plato + 1.001077) * plato - 0.01223565
@@ -73,46 +78,42 @@ class ProducedCalculator:
     @staticmethod
     def calc_hl_std(volume_hl, plato, material):
         """Calcola hl standard dal volume, plato e materiale"""
-        if pd.isna(volume_hl) or pd.isna(plato) or volume_hl == '' or plato == '':
-            return 0
-        
         try:
             volume_hl = float(volume_hl)
             plato = float(plato)
-            material = int(float(material)) if not pd.isna(material) and material != '' else None
+            material = int(float(material))
         except:
-            return 0
-        
+            raise ValueError(f"Valori non validi: volume_hl={volume_hl}, plato={plato}, material={material}")
+
         if volume_hl == 0 or plato == 0:
             return 0
-        
+
         grado_vol = ProducedCalculator.plato_to_volumetric(plato)
         if grado_vol == 0:
             return 0
-        
+
         # Determina grado_std
-        if material is None:  # Era NaN
-            grado_std = 1.6
-        elif material == 0:
+        if material == 0:
             return 0  # Material 0 → ritorna 0
-        else:
-            # Material è valido, usa il mapping
-            if material not in MATERIAL_MAPPING:
-                return 0
-            grado_std = MATERIAL_MAPPING[material]
-            if grado_std == 0:
-                return 0
-        
+
+        # Material è valido, usa il mapping
+        if material not in MATERIAL_MAPPING:
+            raise ValueError(f"Material {material} non trovato nel mapping")
+
+        grado_std = MATERIAL_MAPPING[material]
+        if grado_std == 0:
+            return 0
+
         hl_std = (volume_hl * grado_vol) / grado_std
         return hl_std
     
     def get_packed(self, row):
         """Calcola il totale Packed"""
-        packed_ow1 = float(row['Packed OW1']) if not pd.isna(row['Packed OW1']) and row['Packed OW1'] != '' else 0
-        packed_rgb = float(row['Packed RGB']) if not pd.isna(row['Packed RGB']) and row['Packed RGB'] != '' else 0
-        packed_ow2 = float(row['Packed OW2']) if not pd.isna(row['Packed OW2']) and row['Packed OW2'] != '' else 0
-        packed_keg = float(row['Packed KEG']) if not pd.isna(row['Packed KEG']) and row['Packed KEG'] != '' else 0
-        
+        packed_ow1 = float(row['Packed OW1'])
+        packed_rgb = float(row['Packed RGB'])
+        packed_ow2 = float(row['Packed OW2'])
+        packed_keg = float(row['Packed KEG'])
+
         return {
             'OW1': packed_ow1,
             'RGB': packed_rgb,
@@ -123,14 +124,14 @@ class ProducedCalculator:
     
     def get_cisterne(self, row):
         """Calcola le cisterne (Truck1 + Truck2)"""
-        truck1_plato = float(row['Truck1 Average Plato']) if not pd.isna(row['Truck1 Average Plato']) and row['Truck1 Average Plato'] != '' else 0
-        truck1_level = float(row['Truck1 Level']) if not pd.isna(row['Truck1 Level']) and row['Truck1 Level'] != '' else 0
+        truck1_plato = float(row['Truck1 Average Plato'])
+        truck1_level = float(row['Truck1 Level'])
         truck1_hl_std = self.calc_hl_std(truck1_level, truck1_plato, 8)
-        
-        truck2_plato = float(row['Truck2 Average Plato']) if not pd.isna(row['Truck2 Average Plato']) and row['Truck2 Average Plato'] != '' else 0
-        truck2_level = float(row['Truck2 Level']) if not pd.isna(row['Truck2 Level']) and row['Truck2 Level'] != '' else 0
+
+        truck2_plato = float(row['Truck2 Average Plato'])
+        truck2_level = float(row['Truck2 Level'])
         truck2_hl_std = self.calc_hl_std(truck2_level, truck2_plato, 8)
-        
+
         return {
             'truck1_plato': truck1_plato,
             'truck1_level': truck1_level,
