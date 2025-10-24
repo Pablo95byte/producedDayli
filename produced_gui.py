@@ -11,6 +11,14 @@ import pandas as pd
 import os
 from pathlib import Path
 
+# Matplotlib per grafici
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.figure import Figure
+import matplotlib.dates as mdates
+
 # Import moduli esistenti
 from nan_handler import NaNHandler
 from produced_batch import calc_hl_std, plato_to_volumetric, MATERIAL_MAPPING, BBT_TANKS, FST_TANKS, RBT_TANKS
@@ -216,8 +224,7 @@ class ProducedGUI:
             ('Produced Giornaliero', 'produced_daily'),
             ('Produced Settimanale', 'produced_weekly'),
             ('Componenti Stacked', 'components_stacked'),
-            ('Evoluzione Stock', 'stock_evolution'),
-            ('Tank Specifico', 'tank_specific')
+            ('Evoluzione Stock', 'stock_evolution')
         ]
 
         for text, value in chart_types:
@@ -225,15 +232,28 @@ class ProducedGUI:
                            variable=self.chart_var, value=value,
                            command=self.update_chart).pack(side='left', padx=10)
 
-        # Frame per il grafico (verrà popolato con matplotlib)
+        # Frame per il grafico matplotlib
         self.chart_frame = ttk.Frame(main_frame)
         self.chart_frame.pack(fill='both', expand=True, pady=10)
 
-        # Placeholder
-        placeholder = ttk.Label(self.chart_frame,
-                               text="Carica dati per visualizzare i grafici",
-                               font=('Arial', 12))
-        placeholder.pack(expand=True)
+        # Inizializza canvas matplotlib (vuoto)
+        self.figure = Figure(figsize=(10, 6), dpi=100)
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self.chart_frame)
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+
+        # Toolbar navigazione matplotlib
+        self.toolbar_frame = ttk.Frame(self.chart_frame)
+        self.toolbar_frame.pack(fill='x')
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.toolbar_frame)
+        self.toolbar.update()
+
+        # Messaggio iniziale
+        ax = self.figure.add_subplot(111)
+        ax.text(0.5, 0.5, 'Carica dati per visualizzare i grafici',
+               ha='center', va='center', fontsize=14, color='gray')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        self.canvas.draw()
 
     def create_pdf_tab(self):
         """Crea il tab per generare PDF"""
@@ -512,6 +532,9 @@ class ProducedGUI:
             # Aggiorna dashboard
             self.update_dashboard()
 
+            # Aggiorna grafico
+            self.update_chart()
+
             self.set_status(f"Calcolo completato: {len(results)} giorni elaborati")
             messagebox.showinfo("Successo", f"Calcolo completato!\n{len(results)} giorni elaborati")
 
@@ -610,8 +633,151 @@ class ProducedGUI:
 
     def update_chart(self):
         """Aggiorna il grafico visualizzato"""
-        # TODO: Implementare con matplotlib
-        pass
+        if self.results_df is None:
+            return
+
+        # Pulisci figura
+        self.figure.clear()
+
+        chart_type = self.chart_var.get()
+
+        try:
+            if chart_type == 'produced_daily':
+                self._plot_produced_daily()
+            elif chart_type == 'produced_weekly':
+                self._plot_produced_weekly()
+            elif chart_type == 'components_stacked':
+                self._plot_components_stacked()
+            elif chart_type == 'stock_evolution':
+                self._plot_stock_evolution()
+
+            self.canvas.draw()
+
+        except Exception as e:
+            # In caso di errore, mostra messaggio
+            ax = self.figure.add_subplot(111)
+            ax.text(0.5, 0.5, f'Errore nella generazione del grafico:\n{str(e)}',
+                   ha='center', va='center', fontsize=12, color='red')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            self.canvas.draw()
+
+    def _plot_produced_daily(self):
+        """Grafico Produced giornaliero"""
+        ax = self.figure.add_subplot(111)
+
+        # Converti date per matplotlib
+        dates = pd.to_datetime(self.results_df['Data'])
+
+        # Grafico a barre
+        ax.bar(dates, self.results_df['Produced'], color='steelblue', alpha=0.7, edgecolor='navy')
+
+        ax.set_xlabel('Data', fontweight='bold', fontsize=11)
+        ax.set_ylabel('Produced (hl)', fontweight='bold', fontsize=11)
+        ax.set_title('Produced Giornaliero', fontweight='bold', fontsize=13, pad=15)
+        ax.grid(True, alpha=0.3, axis='y')
+
+        # Formattazione date
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//15)))
+        self.figure.autofmt_xdate(rotation=45)
+
+        self.figure.tight_layout()
+
+    def _plot_produced_weekly(self):
+        """Grafico Produced settimanale"""
+        ax = self.figure.add_subplot(111)
+
+        # Aggiungi colonna settimana
+        df_temp = self.results_df.copy()
+        df_temp['Data'] = pd.to_datetime(df_temp['Data'])
+        df_temp['Week'] = df_temp['Data'].dt.isocalendar().week
+        df_temp['Year'] = df_temp['Data'].dt.isocalendar().year
+        df_temp['Week_Year'] = df_temp['Year'].astype(str) + '-W' + df_temp['Week'].astype(str).str.zfill(2)
+
+        # Aggrega per settimana
+        weekly_produced = df_temp.groupby('Week_Year')['Produced'].sum()
+
+        # Grafico a barre
+        x = range(len(weekly_produced))
+        bars = ax.bar(x, weekly_produced.values, color='darkgreen', alpha=0.7, edgecolor='darkgreen')
+
+        # Aggiungi valori sopra le barre
+        for i, (bar, val) in enumerate(zip(bars, weekly_produced.values)):
+            ax.text(bar.get_x() + bar.get_width()/2, val,
+                   f'{val:.0f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+        ax.set_xlabel('Settimana', fontweight='bold', fontsize=11)
+        ax.set_ylabel('Produced (hl)', fontweight='bold', fontsize=11)
+        ax.set_title('Produced Settimanale (Aggregato)', fontweight='bold', fontsize=13, pad=15)
+        ax.set_xticks(x)
+        ax.set_xticklabels(weekly_produced.index, rotation=45, ha='right')
+        ax.grid(True, alpha=0.3, axis='y')
+
+        self.figure.tight_layout()
+
+    def _plot_components_stacked(self):
+        """Grafico componenti stacked"""
+        ax = self.figure.add_subplot(111)
+
+        # Converti date
+        dates = pd.to_datetime(self.results_df['Data'])
+
+        # Grafico stacked
+        ax.bar(dates, self.results_df['Packed'], label='Packed', alpha=0.8, color='#2E86AB')
+        ax.bar(dates, self.results_df['Cisterne']/2,
+               bottom=self.results_df['Packed'],
+               label='Cisterne/2', alpha=0.8, color='#A23B72')
+        ax.bar(dates, self.results_df['Delta_Stock']/2,
+               bottom=self.results_df['Packed'] + self.results_df['Cisterne']/2,
+               label='Delta Stock/2', alpha=0.8, color='#F18F01')
+
+        ax.set_xlabel('Data', fontweight='bold', fontsize=11)
+        ax.set_ylabel('Valore (hl)', fontweight='bold', fontsize=11)
+        ax.set_title('Componenti del Produced (Stacked)', fontweight='bold', fontsize=13, pad=15)
+        ax.legend(loc='upper left', fontsize=10)
+        ax.grid(True, alpha=0.3, axis='y')
+
+        # Formattazione date
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//15)))
+        self.figure.autofmt_xdate(rotation=45)
+
+        self.figure.tight_layout()
+
+    def _plot_stock_evolution(self):
+        """Grafico evoluzione stock"""
+        ax = self.figure.add_subplot(111)
+
+        # Converti date
+        dates = pd.to_datetime(self.results_df['Data'])
+
+        # Plot linee
+        line1 = ax.plot(dates, self.results_df['Stock_Iniziale'],
+                       marker='o', label='Stock Iniziale', linewidth=2,
+                       color='#E63946', markersize=4)
+        line2 = ax.plot(dates, self.results_df['Stock_Finale'],
+                       marker='s', label='Stock Finale', linewidth=2,
+                       color='#06A77D', markersize=4)
+
+        # Fill between
+        ax.fill_between(dates,
+                       self.results_df['Stock_Iniziale'],
+                       self.results_df['Stock_Finale'],
+                       alpha=0.2, color='gray')
+
+        ax.set_xlabel('Data', fontweight='bold', fontsize=11)
+        ax.set_ylabel('Stock (hl std)', fontweight='bold', fontsize=11)
+        ax.set_title('Evoluzione Stock', fontweight='bold', fontsize=13, pad=15)
+        ax.legend(loc='best', fontsize=10)
+        ax.grid(True, alpha=0.3)
+
+        # Formattazione date
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//15)))
+        self.figure.autofmt_xdate(rotation=45)
+
+        self.figure.tight_layout()
 
     def generate_pdf(self):
         """Genera il report PDF"""
