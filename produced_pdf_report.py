@@ -12,6 +12,7 @@ import os
 import sys
 from pathlib import Path
 from colorama import Fore, Style
+from nan_handler import handle_missing_values
 
 # Rilevamento sistema operativo
 IS_WINDOWS = sys.platform.startswith('win')
@@ -40,57 +41,55 @@ class ReportPDFProduced:
         """Inizializza il generatore di report PDF"""
         self.csv_path = csv_path
         self.df = pd.read_csv(csv_path)
+
+        # Gestione interattiva dei valori NaN
+        self.df = handle_missing_values(self.df)
+
         self.results = []
         self.df_results = None
-        
+
         # Liste tank
         self.BBT_TANKS = [111, 112, 121, 132, 211, 212, 221, 222, 231, 232, 241, 242, 251, 252]
-        self.FST_TANKS = [111, 112, 121, 122, 131, 132, 141, 142, 151, 152, 161, 171, 172, 
+        self.FST_TANKS = [111, 112, 121, 122, 131, 132, 141, 142, 151, 152, 161, 171, 172,
                          211, 212, 221, 222, 231, 232, 241, 242, 243]
         self.RBT_TANKS = [251, 252]
-        
+
         self.MATERIAL_MAPPING = {
-            0: 0, 1: 11.03, 2: 11.03, 3: 11.57, 7: 11.03, 8: 11.57, 
+            0: 0, 1: 11.03, 2: 11.03, 3: 11.57, 7: 11.03, 8: 11.57,
             9: 11.68, 10: 11.03, 21: 11.68, 22: 11.68, 28: 11.68, 32: 11.03, 36: 11.03
         }
     
     def plato_to_volumetric(self, plato):
-        if pd.isna(plato) or plato == '' or plato == 0:
+        if plato == 0:
             return 0
         plato = float(plato)
         grado_v = ((0.0000188792 * plato + 0.003646886) * plato + 1.001077) * plato - 0.01223565
         return grado_v
-    
+
     def calc_hl_std(self, volume_hl, plato, material):
-        if pd.isna(volume_hl) or pd.isna(plato) or volume_hl == '' or plato == '':
-            return 0
         try:
             volume_hl = float(volume_hl)
             plato = float(plato)
-            material = int(float(material)) if not pd.isna(material) and material != '' else None
+            material = int(float(material))
         except:
-            return 0
-        
+            raise ValueError(f"Valori non validi: volume_hl={volume_hl}, plato={plato}, material={material}")
+
         if volume_hl == 0 or plato == 0:
             return 0
-        
+
         grado_vol = self.plato_to_volumetric(plato)
         if grado_vol == 0:
             return 0
-        
-        # Determina grado_std
-        if material is None:  # Era NaN
-            grado_std = 1.6
-        elif material == 0:
-            return 0  # Material 0 → ritorna 0
-        else:
-            # Material è valido, usa il mapping
-            if material not in self.MATERIAL_MAPPING:
-                return 0
-            grado_std = self.MATERIAL_MAPPING[material]
-            if grado_std == 0:
-                return 0
-        
+
+        # Material è valido, usa il mapping
+        if material not in self.MATERIAL_MAPPING:
+            raise ValueError(f"Material {material} non trovato nel mapping")
+
+        grado_std = self.MATERIAL_MAPPING[material]
+        if grado_std == 0:
+            # Material con grado_std = 0 nel mapping ritorna 0
+            return 0
+
         hl_std = (volume_hl * grado_vol) / grado_std
         return hl_std
     
@@ -102,19 +101,19 @@ class ReportPDFProduced:
             row = self.df.iloc[idx]
             
             # PACKED
-            packed_ow1 = float(row['Packed OW1']) if not pd.isna(row['Packed OW1']) and row['Packed OW1'] != '' else 0
-            packed_rgb = float(row['Packed RGB']) if not pd.isna(row['Packed RGB']) and row['Packed RGB'] != '' else 0
-            packed_ow2 = float(row['Packed OW2']) if not pd.isna(row['Packed OW2']) and row['Packed OW2'] != '' else 0
-            packed_keg = float(row['Packed KEG']) if not pd.isna(row['Packed KEG']) and row['Packed KEG'] != '' else 0
+            packed_ow1 = float(row['Packed OW1'])
+            packed_rgb = float(row['Packed RGB'])
+            packed_ow2 = float(row['Packed OW2'])
+            packed_keg = float(row['Packed KEG'])
             packed_total = packed_ow1 + packed_rgb + packed_ow2 + packed_keg
-            
+
             # CISTERNE
-            truck1_plato = float(row['Truck1 Average Plato']) if not pd.isna(row['Truck1 Average Plato']) and row['Truck1 Average Plato'] != '' else 0
-            truck1_level = float(row['Truck1 Level']) if not pd.isna(row['Truck1 Level']) and row['Truck1 Level'] != '' else 0
+            truck1_plato = float(row['Truck1 Average Plato'])
+            truck1_level = float(row['Truck1 Level'])
             truck1_hl_std = self.calc_hl_std(truck1_level, truck1_plato, 8)
-            
-            truck2_plato = float(row['Truck2 Average Plato']) if not pd.isna(row['Truck2 Average Plato']) and row['Truck2 Average Plato'] != '' else 0
-            truck2_level = float(row['Truck2 Level']) if not pd.isna(row['Truck2 Level']) and row['Truck2 Level'] != '' else 0
+
+            truck2_plato = float(row['Truck2 Average Plato'])
+            truck2_level = float(row['Truck2 Level'])
             truck2_hl_std = self.calc_hl_std(truck2_level, truck2_plato, 8)
             
             cisterne_total = truck1_hl_std + truck2_hl_std
@@ -178,29 +177,29 @@ class ReportPDFProduced:
     def estrai_dati_truck(self, truck_num):
         """Estrae dati per un singolo truck (1 o 2)"""
         dati = []
-        
+
         for idx, row in self.df.iterrows():
             plato_col = f'Truck{truck_num} Average Plato'
             level_col = f'Truck{truck_num} Level'
-            
+
             if plato_col in row.index and level_col in row.index:
-                plato = float(row[plato_col]) if not pd.isna(row[plato_col]) and row[plato_col] != '' else 0
-                level = float(row[level_col]) if not pd.isna(row[level_col]) and row[level_col] != '' else 0
+                plato = float(row[plato_col])
+                level = float(row[level_col])
                 hl_std = self.calc_hl_std(level, plato, 8)  # Material 8 per truck
-                
+
                 dati.append({
                     'Data': pd.to_datetime(row['Time']),
                     'Plato': plato,
                     'Level': level,
                     'hl_std': hl_std
                 })
-        
+
         return pd.DataFrame(dati)
     
     def estrai_dati_tank(self, tank_type, tank_num):
         """Estrae dati per un singolo tank"""
         dati = []
-        
+
         for idx, row in self.df.iterrows():
             if tank_type == 'BBT':
                 plato_col = f'BBT {tank_num} Average Plato'
@@ -214,13 +213,13 @@ class ReportPDFProduced:
                 plato_col = f'RBT {tank_num} Average Plato'
                 level_col = f'RBT{tank_num} Level'
                 material_col = f'RBT{tank_num} Material'
-            
+
             if plato_col in row.index and level_col in row.index:
-                plato = float(row[plato_col]) if not pd.isna(row[plato_col]) and row[plato_col] != '' else 0
-                level = float(row[level_col]) if not pd.isna(row[level_col]) and row[level_col] != '' else 0
-                material = int(float(row[material_col])) if not pd.isna(row[material_col]) and row[material_col] != '' else 0
+                plato = float(row[plato_col])
+                level = float(row[level_col])
+                material = int(float(row[material_col]))
                 hl_std = self.calc_hl_std(level, plato, material)
-                
+
                 dati.append({
                     'Data': pd.to_datetime(row['Time']),
                     'Plato': plato,
@@ -228,7 +227,7 @@ class ReportPDFProduced:
                     'Material': material,
                     'hl_std': hl_std
                 })
-        
+
         return pd.DataFrame(dati)
     
     def genera_pdf_report(self):
@@ -236,10 +235,17 @@ class ReportPDFProduced:
         if self.df_results is None:
             print(f"{Fore.RED}✗ Calcola i dati prima!{Style.RESET_ALL}")
             return
-        
+
         print(f"\n{Fore.CYAN}Generazione report PDF...{Style.RESET_ALL}")
-        
-        output_path = os.path.join(OUTPUT_DIR, 'produced_report.pdf')
+
+        # Crea cartella report se non esiste
+        report_dir = os.path.join(OUTPUT_DIR, 'report')
+        os.makedirs(report_dir, exist_ok=True)
+
+        # Nome file con data di generazione
+        data_generazione = datetime.now().strftime('%Y-%m-%d')
+        filename = f'report_produced_{data_generazione}_PA.pdf'
+        output_path = os.path.join(report_dir, filename)
         
         with PdfPages(output_path) as pdf:
             # PAGINA 1: Titolo e Sommario
@@ -628,14 +634,14 @@ Giorni con dati: {len(df_truck[df_truck['Level'] > 0])}
         
         for idx, row in self.df.iterrows():
             data = pd.to_datetime(row['Time'])
-            
+
             # RBT 251
-            plato_251 = float(row['RBT 251 Average Plato']) if not pd.isna(row['RBT 251 Average Plato']) and row['RBT 251 Average Plato'] != '' else 0
+            plato_251 = float(row['RBT 251 Average Plato'])
             material_251 = row['RBT251 Material'] if 'RBT251 Material' in row.index else None
             df_rbt251.append({'Data': data, 'Plato': plato_251, 'Material': material_251})
-            
+
             # RBT 252
-            plato_252 = float(row['RBT 252 Average Plato']) if not pd.isna(row['RBT 252 Average Plato']) and row['RBT 252 Average Plato'] != '' else 0
+            plato_252 = float(row['RBT 252 Average Plato'])
             material_252 = row['RBT252 Material'] if 'RBT252 Material' in row.index else None
             df_rbt252.append({'Data': data, 'Plato': plato_252, 'Material': material_252})
         

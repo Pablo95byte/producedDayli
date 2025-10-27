@@ -12,10 +12,13 @@ from colorama import Fore, Back, Style
 import os
 import sys
 from pathlib import Path
+from nan_handler import handle_missing_values
 
 # Rilevamento sistema operativo e percorsi
 IS_WINDOWS = sys.platform.startswith('win')
 IS_LINUX = sys.platform.startswith('linux')
+
+if IS_WINDOWS:
     OUTPUT_DIR = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App"
 else:
     OUTPUT_DIR = '/mnt/user-data/outputs'
@@ -35,36 +38,12 @@ class GraficiProduced:
     def __init__(self, csv_path):
         """Inizializza il generatore di grafici"""
         self.df = pd.read_csv(csv_path)
-        self._fill_material_nans()  # Riempie i Material NaN
+
+        # Gestione interattiva dei valori NaN
+        self.df = handle_missing_values(self.df)
+
         self.results = []
         self.df_results = None
-    
-    def _fill_material_nans(self):
-        """Riempie i Material NaN con l'ultimo valore conosciuto, default 0"""
-        # Per BBT
-        bbt_tanks = [111, 112, 121, 132, 211, 212, 221, 222, 231, 232, 241, 242, 251, 252]
-        for tank in bbt_tanks:
-            col = f'BBT{tank} Material'
-            if col in self.df.columns:
-                self.df[col] = self.df[col].ffill()  # Forward fill
-                self.df[col] = self.df[col].fillna(0)  # Default 0
-        
-        # Per FST
-        fst_tanks = [111, 112, 121, 122, 131, 132, 141, 142, 151, 152, 161, 171, 172, 
-                     211, 212, 221, 222, 231, 232, 241, 242, 243]
-        for tank in fst_tanks:
-            col = f'FST{tank} Material'
-            if col in self.df.columns:
-                self.df[col] = self.df[col].ffill()
-                self.df[col] = self.df[col].fillna(0)
-        
-        # Per RBT
-        rbt_tanks = [251, 252]
-        for tank in rbt_tanks:
-            col = f'RBT{tank} Material'
-            if col in self.df.columns:
-                self.df[col] = self.df[col].ffill()
-                self.df[col] = self.df[col].fillna(0)
         
     def calcola_produced(self):
         """Calcola tutti i produced (copiato dal calculator)"""
@@ -80,41 +59,37 @@ class GraficiProduced:
         RBT_TANKS = [251, 252]
         
         def plato_to_volumetric(plato):
-            if pd.isna(plato) or plato == '' or plato == 0:
+            if plato == 0:
                 return 0
             plato = float(plato)
             grado_v = ((0.0000188792 * plato + 0.003646886) * plato + 1.001077) * plato - 0.01223565
             return grado_v
-        
+
         def calc_hl_std(volume_hl, plato, material):
-            if pd.isna(volume_hl) or pd.isna(plato) or volume_hl == '' or plato == '':
-                return 0
             try:
                 volume_hl = float(volume_hl)
                 plato = float(plato)
-                material = int(float(material)) if not pd.isna(material) and material != '' else 0
+                material = int(float(material))
             except:
-                return 0
-            
+                raise ValueError(f"Valori non validi: volume_hl={volume_hl}, plato={plato}, material={material}")
+
             if volume_hl == 0 or plato == 0:
                 return 0
-            
+
             grado_vol = plato_to_volumetric(plato)
             if grado_vol == 0:
                 return 0
-            
-            # Se material è 0 (era NaN), usa plato direttamente senza dividere
-            if material == 0:
-                hl_std = volume_hl * grado_vol
-            else:
-                # Material è valido, usa il mapping
-                if material not in MATERIAL_MAPPING:
-                    return 0
-                grado_std = MATERIAL_MAPPING[material]
-                if grado_std == 0:
-                    return 0
-                hl_std = (volume_hl * grado_vol) / grado_std
-            
+
+            # Material è valido, usa il mapping
+            if material not in MATERIAL_MAPPING:
+                raise ValueError(f"Material {material} non trovato nel mapping")
+
+            grado_std = MATERIAL_MAPPING[material]
+            if grado_std == 0:
+                # Material con grado_std = 0 nel mapping ritorna 0
+                return 0
+
+            hl_std = (volume_hl * grado_vol) / grado_std
             return hl_std
         
         print(f"\n{Fore.CYAN}Elaborazione dati per grafici...{Style.RESET_ALL}")
@@ -123,19 +98,19 @@ class GraficiProduced:
             row = self.df.iloc[idx]
             
             # PACKED
-            packed_ow1 = float(row['Packed OW1']) if not pd.isna(row['Packed OW1']) and row['Packed OW1'] != '' else 0
-            packed_rgb = float(row['Packed RGB']) if not pd.isna(row['Packed RGB']) and row['Packed RGB'] != '' else 0
-            packed_ow2 = float(row['Packed OW2']) if not pd.isna(row['Packed OW2']) and row['Packed OW2'] != '' else 0
-            packed_keg = float(row['Packed KEG']) if not pd.isna(row['Packed KEG']) and row['Packed KEG'] != '' else 0
+            packed_ow1 = float(row['Packed OW1'])
+            packed_rgb = float(row['Packed RGB'])
+            packed_ow2 = float(row['Packed OW2'])
+            packed_keg = float(row['Packed KEG'])
             packed_total = packed_ow1 + packed_rgb + packed_ow2 + packed_keg
-            
+
             # CISTERNE
-            truck1_plato = float(row['Truck1 Average Plato']) if not pd.isna(row['Truck1 Average Plato']) and row['Truck1 Average Plato'] != '' else 0
-            truck1_level = float(row['Truck1 Level']) if not pd.isna(row['Truck1 Level']) and row['Truck1 Level'] != '' else 0
+            truck1_plato = float(row['Truck1 Average Plato'])
+            truck1_level = float(row['Truck1 Level'])
             truck1_hl_std = calc_hl_std(truck1_level, truck1_plato, 8)
-            
-            truck2_plato = float(row['Truck2 Average Plato']) if not pd.isna(row['Truck2 Average Plato']) and row['Truck2 Average Plato'] != '' else 0
-            truck2_level = float(row['Truck2 Level']) if not pd.isna(row['Truck2 Level']) and row['Truck2 Level'] != '' else 0
+
+            truck2_plato = float(row['Truck2 Average Plato'])
+            truck2_level = float(row['Truck2 Level'])
             truck2_hl_std = calc_hl_std(truck2_level, truck2_plato, 8)
             
             cisterne_total = truck1_hl_std + truck2_hl_std
