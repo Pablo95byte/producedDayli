@@ -12,26 +12,30 @@
 - Truck1: Level, Plato
 - Truck2: Level, Plato
 
-**NON contiene più:**
-- ~~Packed OW1~~
-- ~~Packed RGB~~
-- ~~Packed OW2~~
-- ~~Packed KEG~~
+**NON contiene più (RIMOSSE):**
+- ~~Packed OW1~~ → SPOSTATO in packed_hourly.csv
+- ~~Packed RGB~~ → SPOSTATO in packed_hourly.csv
+- ~~Packed OW2~~ → SPOSTATO in packed_hourly.csv
+- ~~Packed KEG~~ → SPOSTATO in packed_hourly.csv
 
 **Frequenza:** 1 riga per giorno
 
+⚠️ **IMPORTANTE:** Questo CSV da solo NON è sufficiente per calcolare Produced!
+
 ---
 
-### **CSV 2: packed_hourly.csv (Packed - ORARIO)**
+### **CSV 2: packed_hourly.csv (Packed - ORARIO) ⚠️ OBBLIGATORIO**
 
 **Contenuto:**
 - Timestamp orario (es: 2025-10-01 08:00:00, 2025-10-01 09:00:00, ...)
-- Packed OW1
-- Packed RGB
-- Packed OW2
-- Packed KEG
+- Packed_OW1 (hl prodotti in quell'ora)
+- Packed_RGB (hl prodotti in quell'ora)
+- Packed_OW2 (hl prodotti in quell'ora)
+- Packed_KEG (hl prodotti in quell'ora)
 
 **Frequenza:** 24 righe per giorno (una per ogni ora)
+
+⚠️ **OBBLIGATORIO:** Senza questo file NON è possibile calcolare Produced!
 
 **Esempio:**
 ```csv

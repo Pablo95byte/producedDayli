@@ -143,11 +143,11 @@ class ProducedGUI:
                                command=self.browse_csv)
         browse_btn1.pack(side='right', padx=5)
 
-        # Frame selezione file 2 - PACKED
-        file_frame2 = ttk.LabelFrame(main_frame, text="2️⃣ CSV Packed (orario) - Opzionale", padding="10")
+        # Frame selezione file 2 - PACKED (OBBLIGATORIO)
+        file_frame2 = ttk.LabelFrame(main_frame, text="2️⃣ CSV Packed (orario) ⚠️ OBBLIGATORIO", padding="10")
         file_frame2.pack(fill='x', pady=10)
 
-        self.packed_csv_path_var = tk.StringVar(value="Nessun file selezionato (verrà usato il CSV principale)")
+        self.packed_csv_path_var = tk.StringVar(value="Nessun file selezionato")
         path_label2 = ttk.Label(file_frame2, textvariable=self.packed_csv_path_var,
                               foreground='gray', wraplength=800)
         path_label2.pack(side='left', padx=5)
@@ -392,14 +392,24 @@ class ProducedGUI:
     # ============== FUNZIONI PRINCIPALI ==============
 
     def browse_csv(self):
-        """Apre dialog per selezionare CSV"""
+        """Apre dialog per selezionare CSV Stock/Cisterne"""
         filename = filedialog.askopenfilename(
-            title="Seleziona file CSV",
+            title="Seleziona CSV Stock/Cisterne (giornaliero)",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
         )
         if filename:
             self.csv_path = filename
             self.csv_path_var.set(filename)
+
+    def browse_packed_csv(self):
+        """Apre dialog per selezionare CSV Packed orario"""
+        filename = filedialog.askopenfilename(
+            title="Seleziona CSV Packed (orario)",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        if filename:
+            self.packed_csv_path = filename
+            self.packed_csv_path_var.set(filename)
 
     def load_csv(self):
         """Carica CSV dal menu"""
@@ -408,25 +418,45 @@ class ProducedGUI:
             self.load_and_analyze()
 
     def load_and_analyze(self):
-        """Carica il CSV e analizza i dati"""
+        """Carica i CSV e analizza i dati"""
+        # Verifica che entrambi i file siano selezionati
         if not self.csv_path:
-            messagebox.showwarning("Attenzione", "Seleziona prima un file CSV")
+            messagebox.showwarning("Attenzione", "Seleziona il file CSV Stock/Cisterne")
+            return
+
+        if not self.packed_csv_path:
+            messagebox.showwarning("Attenzione",
+                                 "Seleziona il file CSV Packed (orario)\n\n"
+                                 "Il file Packed è OBBLIGATORIO per calcolare il Produced!")
             return
 
         try:
             self.set_status("Caricamento CSV in corso...", show_progress=True)
 
-            # Carica CSV
+            # === CARICA CSV 1: STOCK/CISTERNE (giornaliero) ===
             self.df = pd.read_csv(self.csv_path)
 
-            # Analizza NaN
+            # === CARICA CSV 2: PACKED (orario) ===
+            self.df_packed = pd.read_csv(self.packed_csv_path)
+
+            # === AGGREGA PACKED ORARIO → GIORNALIERO ===
+            self.set_status("Aggregazione dati Packed orari...", show_progress=True)
+            packed_daily = self._aggregate_packed_hourly()
+
+            # === MERGE DEI DUE DATAFRAME ===
+            self.set_status("Unione dati Stock e Packed...", show_progress=True)
+            self.df = self._merge_stock_and_packed(self.df, packed_daily)
+
+            # Analizza NaN (su DataFrame unito)
             handler = NaNHandler(self.df)
             missing_report = handler.detect_missing_values()
 
             # Mostra info
-            info = f"File CSV caricato: {os.path.basename(self.csv_path)}\n"
-            info += f"Righe: {len(self.df)}\n"
-            info += f"Colonne: {len(self.df.columns)}\n\n"
+            info = f"✅ CSV Stock/Cisterne: {os.path.basename(self.csv_path)}\n"
+            info += f"   Righe: {len(self.df)}\n\n"
+            info += f"✅ CSV Packed (orario): {os.path.basename(self.packed_csv_path)}\n"
+            info += f"   Righe orarie: {len(self.df_packed)}\n"
+            info += f"   Giorni aggregati: {len(packed_daily)}\n\n"
 
             if missing_report:
                 info += f"⚠️ ATTENZIONE: Rilevati {len(missing_report)} valori NaN!\n\n"
@@ -460,10 +490,55 @@ class ProducedGUI:
             self.set_status("Errore durante il caricamento")
             messagebox.showerror("Errore", f"Errore durante il caricamento:\n{str(e)}")
 
+    def _aggregate_packed_hourly(self):
+        """Aggrega i dati Packed orari in dati giornalieri"""
+        # Converti timestamp a datetime
+        self.df_packed['Timestamp'] = pd.to_datetime(self.df_packed['Timestamp'])
+
+        # Estrai solo la data (senza ora)
+        self.df_packed['Date'] = self.df_packed['Timestamp'].dt.date
+
+        # Aggrega per giorno (somma di tutte le ore)
+        packed_daily = self.df_packed.groupby('Date').agg({
+            'Packed_OW1': 'sum',
+            'Packed_RGB': 'sum',
+            'Packed_OW2': 'sum',
+            'Packed_KEG': 'sum'
+        }).reset_index()
+
+        # Rinomina colonne per compatibilità con codice esistente
+        packed_daily = packed_daily.rename(columns={
+            'Packed_OW1': 'Packed OW1',
+            'Packed_RGB': 'Packed RGB',
+            'Packed_OW2': 'Packed OW2',
+            'Packed_KEG': 'Packed KEG'
+        })
+
+        return packed_daily
+
+    def _merge_stock_and_packed(self, df_stock, df_packed):
+        """Unisce i DataFrame Stock/Cisterne e Packed per data"""
+        # Converti Time del DataFrame stock a date
+        df_stock['Date'] = pd.to_datetime(df_stock['Time']).dt.date
+
+        # Merge left join (mantiene tutte le date di Stock, anche se Packed manca)
+        df_merged = df_stock.merge(df_packed, on='Date', how='left')
+
+        # Riempi NaN con 0 per i Packed (se una data non ha dati Packed)
+        packed_cols = ['Packed OW1', 'Packed RGB', 'Packed OW2', 'Packed KEG']
+        for col in packed_cols:
+            if col in df_merged.columns:
+                df_merged[col] = df_merged[col].fillna(0)
+
+        # Rimuovi colonna Date temporanea
+        df_merged = df_merged.drop('Date', axis=1)
+
+        return df_merged
+
     def manage_nan(self):
         """Gestisce i valori NaN interattivamente"""
         if self.df is None:
-            messagebox.showwarning("Attenzione", "Carica prima un file CSV")
+            messagebox.showwarning("Attenzione", "Carica prima i file CSV")
             return
 
         handler = NaNHandler(self.df)
