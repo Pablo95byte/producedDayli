@@ -668,18 +668,18 @@ class ProducedGUI:
             self.canvas.draw()
 
     def _plot_produced_daily(self):
-        """Grafico Produced giornaliero"""
+        """Grafico Produced giornaliero con tooltip interattivi"""
         ax = self.figure.add_subplot(111)
 
         # Converti date per matplotlib
         dates = pd.to_datetime(self.results_df['Data'])
 
         # Grafico a barre
-        ax.bar(dates, self.results_df['Produced'], color='steelblue', alpha=0.7, edgecolor='navy')
+        bars = ax.bar(dates, self.results_df['Produced'], color='steelblue', alpha=0.7, edgecolor='navy')
 
         ax.set_xlabel('Data', fontweight='bold', fontsize=11)
         ax.set_ylabel('Produced (hl)', fontweight='bold', fontsize=11)
-        ax.set_title('Produced Giornaliero', fontweight='bold', fontsize=13, pad=15)
+        ax.set_title('Produced Giornaliero (passa il mouse per valori)', fontweight='bold', fontsize=13, pad=15)
         ax.grid(True, alpha=0.3, axis='y')
 
         # Formattazione date
@@ -687,10 +687,13 @@ class ProducedGUI:
         ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//15)))
         self.figure.autofmt_xdate(rotation=45)
 
+        # Aggiungi tooltip interattivi
+        self._add_bar_tooltips(ax, bars, dates, self.results_df['Produced'])
+
         self.figure.tight_layout()
 
     def _plot_produced_weekly(self):
-        """Grafico Produced settimanale"""
+        """Grafico Produced settimanale con tooltip"""
         ax = self.figure.add_subplot(111)
 
         # Aggiungi colonna settimana
@@ -700,46 +703,51 @@ class ProducedGUI:
         df_temp['Year'] = df_temp['Data'].dt.isocalendar().year
         df_temp['Week_Year'] = df_temp['Year'].astype(str) + '-W' + df_temp['Week'].astype(str).str.zfill(2)
 
-        # Aggrega per settimana
-        weekly_produced = df_temp.groupby('Week_Year')['Produced'].sum()
+        # Aggrega per settimana e conta giorni
+        weekly_data = df_temp.groupby('Week_Year').agg({
+            'Produced': ['sum', 'mean', 'count']
+        }).reset_index()
+        weekly_data.columns = ['Week_Year', 'Total', 'Mean', 'Days']
 
         # Grafico a barre
-        x = range(len(weekly_produced))
-        bars = ax.bar(x, weekly_produced.values, color='darkgreen', alpha=0.7, edgecolor='darkgreen')
+        x = range(len(weekly_data))
+        bars = ax.bar(x, weekly_data['Total'], color='darkgreen', alpha=0.7, edgecolor='darkgreen')
 
         # Aggiungi valori sopra le barre
-        for i, (bar, val) in enumerate(zip(bars, weekly_produced.values)):
-            ax.text(bar.get_x() + bar.get_width()/2, val,
-                   f'{val:.0f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+        for i, val in enumerate(weekly_data['Total']):
+            ax.text(i, val, f'{val:.0f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 
         ax.set_xlabel('Settimana', fontweight='bold', fontsize=11)
         ax.set_ylabel('Produced (hl)', fontweight='bold', fontsize=11)
-        ax.set_title('Produced Settimanale (Aggregato)', fontweight='bold', fontsize=13, pad=15)
+        ax.set_title('Produced Settimanale - Hover per media giornaliera', fontweight='bold', fontsize=13, pad=15)
         ax.set_xticks(x)
-        ax.set_xticklabels(weekly_produced.index, rotation=45, ha='right')
+        ax.set_xticklabels(weekly_data['Week_Year'], rotation=45, ha='right')
         ax.grid(True, alpha=0.3, axis='y')
+
+        # Tooltip con dettagli (media e giorni)
+        self._add_weekly_tooltips(ax, bars, weekly_data)
 
         self.figure.tight_layout()
 
     def _plot_components_stacked(self):
-        """Grafico componenti stacked"""
+        """Grafico componenti stacked con tooltip"""
         ax = self.figure.add_subplot(111)
 
         # Converti date
         dates = pd.to_datetime(self.results_df['Data'])
 
         # Grafico stacked
-        ax.bar(dates, self.results_df['Packed'], label='Packed', alpha=0.8, color='#2E86AB')
-        ax.bar(dates, self.results_df['Cisterne']/2,
+        bars1 = ax.bar(dates, self.results_df['Packed'], label='Packed', alpha=0.8, color='#2E86AB')
+        bars2 = ax.bar(dates, self.results_df['Cisterne']/2,
                bottom=self.results_df['Packed'],
                label='Cisterne/2', alpha=0.8, color='#A23B72')
-        ax.bar(dates, self.results_df['Delta_Stock']/2,
+        bars3 = ax.bar(dates, self.results_df['Delta_Stock']/2,
                bottom=self.results_df['Packed'] + self.results_df['Cisterne']/2,
                label='Delta Stock/2', alpha=0.8, color='#F18F01')
 
         ax.set_xlabel('Data', fontweight='bold', fontsize=11)
         ax.set_ylabel('Valore (hl)', fontweight='bold', fontsize=11)
-        ax.set_title('Componenti del Produced (Stacked)', fontweight='bold', fontsize=13, pad=15)
+        ax.set_title('Componenti del Produced (Stacked) - Hover per dettagli', fontweight='bold', fontsize=13, pad=15)
         ax.legend(loc='upper left', fontsize=10)
         ax.grid(True, alpha=0.3, axis='y')
 
@@ -747,6 +755,10 @@ class ProducedGUI:
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
         ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//15)))
         self.figure.autofmt_xdate(rotation=45)
+
+        # Aggiungi tooltip per il totale (Produced)
+        totals = self.results_df['Produced'].values
+        self._add_bar_tooltips(ax, bars1, dates, totals, label='Produced Totale')
 
         self.figure.tight_layout()
 
@@ -882,6 +894,80 @@ class ProducedGUI:
         self.pdf_log.see('end')
         self.pdf_log.config(state='disabled')
         self.root.update_idletasks()
+
+    def _add_bar_tooltips(self, ax, bars, dates, values, label='Produced'):
+        """Aggiunge tooltip interattivi alle barre del grafico"""
+        # Crea annotazione (inizialmente invisibile)
+        annot = ax.annotate("", xy=(0, 0), xytext=(10, 10),
+                           textcoords="offset points",
+                           bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.9),
+                           arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+                           fontsize=9, fontweight='bold')
+        annot.set_visible(False)
+
+        def hover(event):
+            """Gestisce evento hover del mouse"""
+            if event.inaxes == ax:
+                # Trova la barra sotto il cursore
+                for i, (bar, date, val) in enumerate(zip(bars, dates, values)):
+                    if bar.contains(event)[0]:
+                        # Aggiorna posizione e testo dell'annotazione
+                        x = bar.get_x() + bar.get_width() / 2
+                        y = bar.get_height()
+                        annot.xy = (x, y)
+
+                        # Formatta data
+                        date_str = pd.to_datetime(date).strftime('%d-%m-%Y')
+                        text = f"{date_str}\n{label}: {val:.2f} hl"
+                        annot.set_text(text)
+                        annot.set_visible(True)
+                        self.canvas.draw_idle()
+                        return
+
+                # Se non c'è nessuna barra sotto il cursore, nascondi tooltip
+                if annot.get_visible():
+                    annot.set_visible(False)
+                    self.canvas.draw_idle()
+
+        # Collega evento
+        self.canvas.mpl_connect("motion_notify_event", hover)
+
+    def _add_weekly_tooltips(self, ax, bars, weekly_data):
+        """Aggiunge tooltip dettagliati per grafico settimanale"""
+        # Crea annotazione
+        annot = ax.annotate("", xy=(0, 0), xytext=(10, 10),
+                           textcoords="offset points",
+                           bbox=dict(boxstyle="round,pad=0.5", fc="lightgreen", alpha=0.9),
+                           arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+                           fontsize=9, fontweight='bold')
+        annot.set_visible(False)
+
+        def hover(event):
+            """Gestisce evento hover del mouse"""
+            if event.inaxes == ax:
+                for i, bar in enumerate(bars):
+                    if bar.contains(event)[0]:
+                        x = bar.get_x() + bar.get_width() / 2
+                        y = bar.get_height()
+                        annot.xy = (x, y)
+
+                        # Dati settimana
+                        week = weekly_data.iloc[i]
+                        text = f"{week['Week_Year']}\n"
+                        text += f"Totale: {week['Total']:.2f} hl\n"
+                        text += f"Media: {week['Mean']:.2f} hl/giorno\n"
+                        text += f"Giorni: {int(week['Days'])}"
+
+                        annot.set_text(text)
+                        annot.set_visible(True)
+                        self.canvas.draw_idle()
+                        return
+
+                if annot.get_visible():
+                    annot.set_visible(False)
+                    self.canvas.draw_idle()
+
+        self.canvas.mpl_connect("motion_notify_event", hover)
 
     def show_formula_test(self):
         """Mostra dialog per testare le formule"""

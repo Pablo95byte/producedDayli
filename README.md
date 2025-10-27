@@ -86,12 +86,25 @@ producedDayli/
 - Delta Stock
 
 ### 3️⃣ Tab "Grafici"
-**4 grafici matplotlib interattivi:**
+**4 grafici matplotlib interattivi con tooltip hover:**
 
-1. **Produced Giornaliero** - Barre giornaliere con valori annotati
+1. **Produced Giornaliero** - Barre giornaliere
+   - 🖱️ Passa il mouse su una barra per vedere data e valore esatto
+
 2. **Produced Settimanale** - Aggregato per settimana (2025-W01, etc.)
+   - Valori totali annotati sulle barre
+   - 🖱️ Hover per vedere: Totale, Media giornaliera, N° giorni
+
 3. **Componenti Stacked** - Breakdown: Packed + Cisterne/2 + ΔStock/2
+   - 🖱️ Hover per vedere Produced totale del giorno
+
 4. **Evoluzione Stock** - Trend Stock Iniziale vs Finale
+   - Linee con marker per visualizzare l'andamento
+
+**Tooltip interattivi:**
+- ✨ Passa il mouse sopra le barre per vedere i valori esatti
+- Box giallo/verde con dettagli completi
+- Nessun clic necessario, solo hover!
 
 **Toolbar inclusa:**
 - Home, Pan, Zoom, Save PNG
