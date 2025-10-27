@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 import os
+import sys
 from pathlib import Path
 
 # Matplotlib per grafici
@@ -22,6 +23,10 @@ import matplotlib.dates as mdates
 # Import moduli esistenti
 from nan_handler import NaNHandler
 from produced_batch import calc_hl_std, plato_to_volumetric, MATERIAL_MAPPING, BBT_TANKS, FST_TANKS, RBT_TANKS
+
+# Rilevamento sistema operativo
+IS_WINDOWS = sys.platform.startswith('win')
+IS_LINUX = sys.platform.startswith('linux')
 
 class ProducedGUI:
     def __init__(self, root):
@@ -781,7 +786,94 @@ class ProducedGUI:
 
     def generate_pdf(self):
         """Genera il report PDF"""
-        messagebox.showinfo("Info", "Generazione PDF... (da implementare)")
+        if self.results_df is None:
+            messagebox.showwarning("Attenzione", "Calcola prima i risultati")
+            return
+
+        try:
+            # Log inizio
+            self._pdf_log("Inizio generazione report PDF...")
+            self.set_status("Generazione PDF in corso...", show_progress=True)
+
+            # Importa modulo PDF
+            from produced_pdf_report import ReportPDFProduced
+
+            # Crea report con i dati già caricati
+            self._pdf_log("Inizializzazione report...")
+            report = ReportPDFProduced(self.csv_path)
+
+            # Usa i dati già elaborati
+            report.df = self.df.copy()
+
+            # Calcola produced (usa i risultati già calcolati)
+            self._pdf_log("Preparazione dati per PDF...")
+            report.results = self.results_df.to_dict('records')
+            report.df_results = self.results_df.copy()
+
+            # Aggiungi colonne settimana se mancano
+            if 'Week' not in report.df_results.columns:
+                report.df_results['Data'] = pd.to_datetime(report.df_results['Data'])
+                report.df_results['Week'] = report.df_results['Data'].dt.isocalendar().week
+                report.df_results['Year'] = report.df_results['Data'].dt.isocalendar().year
+                report.df_results['Week_Year'] = (report.df_results['Year'].astype(str) + '-W' +
+                                                   report.df_results['Week'].astype(str).str.zfill(2))
+
+            # Genera PDF
+            self._pdf_log("Generazione pagine PDF...")
+            self._pdf_log("  - Pagina titolo")
+            self._pdf_log("  - Grafici principali")
+
+            if self.pdf_include_weekly.get():
+                self._pdf_log("  - Analisi settimanali")
+
+            if self.pdf_include_tanks.get():
+                self._pdf_log("  - Dettagli tank BBT")
+                self._pdf_log("  - Dettagli tank FST")
+                self._pdf_log("  - Dettagli truck")
+
+            report.genera_pdf_report()
+
+            # Trova il file generato
+            import os
+            if IS_WINDOWS:
+                pdf_path = os.path.join(r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App",
+                                       'produced_report.pdf')
+            else:
+                pdf_path = '/mnt/user-data/outputs/produced_report.pdf'
+
+            # Se non esiste, cerca nella cartella corrente
+            if not os.path.exists(pdf_path):
+                pdf_path = os.path.join(os.path.dirname(self.csv_path or '.'), 'produced_report.pdf')
+
+            self._pdf_log(f"\n✓ Report PDF generato con successo!")
+            self._pdf_log(f"  Percorso: {pdf_path}")
+
+            self.set_status("Report PDF generato")
+            messagebox.showinfo("Successo",
+                               f"Report PDF generato con successo!\n\n"
+                               f"File: produced_report.pdf\n"
+                               f"Percorso: {os.path.dirname(pdf_path)}")
+
+        except ImportError as e:
+            self._pdf_log(f"\n✗ ERRORE: Modulo non trovato")
+            self._pdf_log(f"  {str(e)}")
+            self.set_status("Errore: modulo mancante")
+            messagebox.showerror("Errore",
+                               "Modulo produced_pdf_report.py non trovato!\n"
+                               "Assicurati che sia nella stessa cartella.")
+        except Exception as e:
+            self._pdf_log(f"\n✗ ERRORE durante la generazione:")
+            self._pdf_log(f"  {str(e)}")
+            self.set_status("Errore generazione PDF")
+            messagebox.showerror("Errore", f"Errore durante la generazione PDF:\n{str(e)}")
+
+    def _pdf_log(self, message):
+        """Aggiunge messaggio al log PDF"""
+        self.pdf_log.config(state='normal')
+        self.pdf_log.insert('end', message + '\n')
+        self.pdf_log.see('end')
+        self.pdf_log.config(state='disabled')
+        self.root.update_idletasks()
 
     def show_formula_test(self):
         """Mostra dialog per testare le formule"""
