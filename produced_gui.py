@@ -492,27 +492,69 @@ class ProducedGUI:
 
     def _aggregate_packed_hourly(self):
         """Aggrega i dati Packed orari in dati giornalieri"""
+        # Trova la colonna temporale (può chiamarsi Timestamp, Time, DateTime, etc.)
+        time_col = None
+        possible_time_cols = ['Timestamp', 'Time', 'DateTime', 'Date', 'timestamp', 'time', 'datetime']
+
+        for col in possible_time_cols:
+            if col in self.df_packed.columns:
+                time_col = col
+                break
+
+        if time_col is None:
+            # Usa la prima colonna se non trova nulla
+            time_col = self.df_packed.columns[0]
+            messagebox.showwarning(
+                "Attenzione",
+                f"Colonna temporale non trovata nel CSV Packed.\n"
+                f"Uso prima colonna: {time_col}\n\n"
+                f"Colonne trovate: {', '.join(self.df_packed.columns)}"
+            )
+
         # Converti timestamp a datetime
-        self.df_packed['Timestamp'] = pd.to_datetime(self.df_packed['Timestamp'])
+        try:
+            self.df_packed[time_col] = pd.to_datetime(self.df_packed[time_col])
+        except Exception as e:
+            raise ValueError(
+                f"❌ Errore conversione timestamp nella colonna '{time_col}'!\n\n"
+                f"Formato richiesto: YYYY-MM-DD HH:MM:SS\n"
+                f"Esempio: 2025-10-01 08:00:00\n\n"
+                f"Errore: {str(e)}"
+            )
 
         # Estrai solo la data (senza ora)
-        self.df_packed['Date'] = self.df_packed['Timestamp'].dt.date
+        self.df_packed['Date'] = self.df_packed[time_col].dt.date
+
+        # Trova colonne Packed (possono avere nomi diversi)
+        packed_cols_map = {}
+        for orig_name, target_name in [
+            ('Packed_OW1', 'Packed OW1'),
+            ('Packed_RGB', 'Packed RGB'),
+            ('Packed_OW2', 'Packed OW2'),
+            ('Packed_KEG', 'Packed KEG'),
+            ('OW1', 'Packed OW1'),  # Fallback senza prefisso
+            ('RGB', 'Packed RGB'),
+            ('OW2', 'Packed OW2'),
+            ('KEG', 'Packed KEG')
+        ]:
+            if orig_name in self.df_packed.columns:
+                packed_cols_map[orig_name] = target_name
+
+        if not packed_cols_map:
+            raise ValueError(
+                f"❌ Colonne Packed non trovate nel CSV!\n\n"
+                f"Colonne richieste: Packed_OW1, Packed_RGB, Packed_OW2, Packed_KEG\n"
+                f"(oppure: OW1, RGB, OW2, KEG)\n\n"
+                f"Colonne trovate nel CSV: {', '.join(self.df_packed.columns)}\n\n"
+                f"Verifica il formato del CSV Packed."
+            )
 
         # Aggrega per giorno (somma di tutte le ore)
-        packed_daily = self.df_packed.groupby('Date').agg({
-            'Packed_OW1': 'sum',
-            'Packed_RGB': 'sum',
-            'Packed_OW2': 'sum',
-            'Packed_KEG': 'sum'
-        }).reset_index()
+        agg_dict = {col: 'sum' for col in packed_cols_map.keys()}
+        packed_daily = self.df_packed.groupby('Date').agg(agg_dict).reset_index()
 
-        # Rinomina colonne per compatibilità con codice esistente
-        packed_daily = packed_daily.rename(columns={
-            'Packed_OW1': 'Packed OW1',
-            'Packed_RGB': 'Packed RGB',
-            'Packed_OW2': 'Packed OW2',
-            'Packed_KEG': 'Packed KEG'
-        })
+        # Rinomina colonne per compatibilità
+        packed_daily = packed_daily.rename(columns=packed_cols_map)
 
         return packed_daily
 
