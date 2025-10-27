@@ -37,7 +37,9 @@ class ProducedGUI:
 
         # Variabili di stato
         self.df = None
+        self.df_packed = None  # DataFrame Packed orario
         self.csv_path = None
+        self.packed_csv_path = None  # Path CSV Packed
         self.results_df = None
         self.data_warning = None  # Warning per dati incompleti
 
@@ -117,22 +119,42 @@ class ProducedGUI:
         main_frame.pack(fill='both', expand=True)
 
         # Titolo
-        title = ttk.Label(main_frame, text="Caricamento Dati CSV",
+        title = ttk.Label(main_frame, text="Caricamento Dati CSV (Dual Mode)",
                          font=('Arial', 16, 'bold'))
         title.pack(pady=10)
 
-        # Frame selezione file
-        file_frame = ttk.LabelFrame(main_frame, text="Seleziona File CSV", padding="10")
-        file_frame.pack(fill='x', pady=10)
+        # Sottotitolo esplicativo
+        subtitle = ttk.Label(main_frame,
+                            text="Carica 2 file: Stock/Cisterne (giornaliero) + Packed (orario)",
+                            font=('Arial', 9, 'italic'),
+                            foreground='gray')
+        subtitle.pack(pady=5)
+
+        # Frame selezione file 1 - STOCK/CISTERNE
+        file_frame1 = ttk.LabelFrame(main_frame, text="1️⃣ CSV Stock e Cisterne (giornaliero)", padding="10")
+        file_frame1.pack(fill='x', pady=10)
 
         self.csv_path_var = tk.StringVar(value="Nessun file selezionato")
-        path_label = ttk.Label(file_frame, textvariable=self.csv_path_var,
+        path_label1 = ttk.Label(file_frame1, textvariable=self.csv_path_var,
                               foreground='gray')
-        path_label.pack(side='left', padx=5)
+        path_label1.pack(side='left', padx=5)
 
-        browse_btn = ttk.Button(file_frame, text="Sfoglia...",
+        browse_btn1 = ttk.Button(file_frame1, text="Sfoglia...",
                                command=self.browse_csv)
-        browse_btn.pack(side='right', padx=5)
+        browse_btn1.pack(side='right', padx=5)
+
+        # Frame selezione file 2 - PACKED
+        file_frame2 = ttk.LabelFrame(main_frame, text="2️⃣ CSV Packed (orario) - Opzionale", padding="10")
+        file_frame2.pack(fill='x', pady=10)
+
+        self.packed_csv_path_var = tk.StringVar(value="Nessun file selezionato (verrà usato il CSV principale)")
+        path_label2 = ttk.Label(file_frame2, textvariable=self.packed_csv_path_var,
+                              foreground='gray', wraplength=800)
+        path_label2.pack(side='left', padx=5)
+
+        browse_btn2 = ttk.Button(file_frame2, text="Sfoglia...",
+                               command=self.browse_packed_csv)
+        browse_btn2.pack(side='right', padx=5)
 
         # Frame info dati caricati
         self.info_frame = ttk.LabelFrame(main_frame, text="Informazioni Dati", padding="10")
