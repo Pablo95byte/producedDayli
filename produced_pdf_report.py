@@ -18,10 +18,12 @@ from nan_handler import handle_missing_values
 IS_WINDOWS = sys.platform.startswith('win')
 if IS_WINDOWS:
     # Path fisso per Windows
-    CSV_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\produced.csv"
+    CSV_STOCK_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\produced_stock_only.csv"
+    CSV_PACKED_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\packed_hourly.csv"
     OUTPUT_DIR = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App"
 else:
-    CSV_PATH = '/mnt/user-data/uploads/produced.csv'
+    CSV_STOCK_PATH = '/mnt/user-data/uploads/produced_stock_only.csv'
+    CSV_PACKED_PATH = '/mnt/user-data/uploads/packed_hourly.csv'
     OUTPUT_DIR = '/mnt/user-data/outputs'
 
 # Importa matplotlib
@@ -37,13 +39,43 @@ except ImportError:
     sys.exit(1)
 
 class ReportPDFProduced:
-    def __init__(self, csv_path):
-        """Inizializza il generatore di report PDF"""
-        self.csv_path = csv_path
-        self.df = pd.read_csv(csv_path)
+    def __init__(self, csv_path=None, df=None, csv_stock_path=None, csv_packed_path=None):
+        """
+        Inizializza il generatore di report PDF
 
-        # Gestione interattiva dei valori NaN
-        self.df = handle_missing_values(self.df)
+        Args:
+            csv_path: Path del CSV unificato (deprecato, per retrocompatibilità GUI)
+            df: DataFrame già mergato (usato dalla GUI)
+            csv_stock_path: Path CSV Stock/Cisterne (per uso standalone)
+            csv_packed_path: Path CSV Packed orario (per uso standalone)
+        """
+        self.csv_path = csv_path
+
+        # Se viene passato un DataFrame, usalo direttamente
+        if df is not None:
+            self.df = df
+        # Altrimenti, carica e mergia i CSV
+        elif csv_stock_path and csv_packed_path:
+            print("Caricamento CSV Stock/Cisterne...")
+            df_stock = pd.read_csv(csv_stock_path)
+
+            print("Caricamento CSV Packed (orario)...")
+            df_packed = pd.read_csv(csv_packed_path)
+
+            print("Aggregazione dati Packed...")
+            packed_daily = self._aggregate_packed_hourly(df_packed)
+
+            print("Merge dei DataFrame...")
+            self.df = self._merge_stock_and_packed(df_stock, packed_daily)
+
+            # Gestione interattiva dei valori NaN
+            self.df = handle_missing_values(self.df)
+        # Fallback: carica CSV singolo (retrocompatibilità)
+        elif csv_path:
+            self.df = pd.read_csv(csv_path)
+            self.df = handle_missing_values(self.df)
+        else:
+            raise ValueError("Devi fornire df, oppure (csv_stock_path + csv_packed_path), oppure csv_path")
 
         self.results = []
         self.df_results = None
@@ -59,6 +91,40 @@ class ReportPDFProduced:
             0: 0, 1: 11.03, 2: 11.03, 3: 11.57, 7: 11.03, 8: 11.57,
             9: 11.68, 10: 11.03, 21: 11.68, 22: 11.68, 28: 11.68, 32: 11.03, 36: 11.03
         }
+
+    def _aggregate_packed_hourly(self, df_packed):
+        """Aggrega i dati Packed orari in dati giornalieri"""
+        df_packed['Timestamp'] = pd.to_datetime(df_packed['Timestamp'])
+        df_packed['Date'] = df_packed['Timestamp'].dt.date
+
+        packed_daily = df_packed.groupby('Date').agg({
+            'Packed_OW1': 'sum',
+            'Packed_RGB': 'sum',
+            'Packed_OW2': 'sum',
+            'Packed_KEG': 'sum'
+        }).reset_index()
+
+        packed_daily = packed_daily.rename(columns={
+            'Packed_OW1': 'Packed OW1',
+            'Packed_RGB': 'Packed RGB',
+            'Packed_OW2': 'Packed OW2',
+            'Packed_KEG': 'Packed KEG'
+        })
+
+        return packed_daily
+
+    def _merge_stock_and_packed(self, df_stock, df_packed):
+        """Unisce i DataFrame Stock/Cisterne e Packed per data"""
+        df_stock['Date'] = pd.to_datetime(df_stock['Time']).dt.date
+        df_merged = df_stock.merge(df_packed, on='Date', how='left')
+
+        packed_cols = ['Packed OW1', 'Packed RGB', 'Packed OW2', 'Packed KEG']
+        for col in packed_cols:
+            if col in df_merged.columns:
+                df_merged[col] = df_merged[col].fillna(0)
+
+        df_merged = df_merged.drop('Date', axis=1)
+        return df_merged
     
     def plato_to_volumetric(self, plato):
         if plato == 0:
@@ -732,18 +798,47 @@ Material: {int(df_rbt252['Material'].mode()[0]) if len(df_rbt252) > 0 and pd.not
         pdf.savefig(fig, bbox_inches='tight')
         plt.close(fig)
 
-def main_pdf_report(csv_path):
+def main_pdf_report(csv_stock_path, csv_packed_path):
     """Funzione principale per generare report PDF"""
-    report = ReportPDFProduced(csv_path)
+    print("="*60)
+    print("PRODUCED CALCULATOR - Report PDF (Dual CSV)")
+    print("="*60)
+    report = ReportPDFProduced(csv_stock_path=csv_stock_path, csv_packed_path=csv_packed_path)
     report.calcola_produced()
     report.genera_pdf_report()
     print(f"{Fore.GREEN}✓ Report PDF completato!{Style.RESET_ALL}\n")
 
 if __name__ == '__main__':
-    csv_path = os.path.join(OUTPUT_DIR, 'produced.csv')
-    
-    if not os.path.exists(csv_path):
-        print(f"{Fore.RED}✗ File CSV non trovato: {csv_path}{Style.RESET_ALL}")
+    # Prova a trovare i file CSV
+    if not os.path.exists(CSV_STOCK_PATH):
+        # Cerca nella cartella corrente
+        for file in os.listdir('.'):
+            if 'stock' in file.lower() and file.endswith('.csv'):
+                CSV_STOCK_PATH = os.path.join('.', file)
+                break
+            elif file == 'produced.csv':
+                CSV_STOCK_PATH = os.path.join('.', file)
+                break
+
+    if not os.path.exists(CSV_PACKED_PATH):
+        # Cerca nella cartella corrente
+        for file in os.listdir('.'):
+            if 'packed' in file.lower() and file.endswith('.csv'):
+                CSV_PACKED_PATH = os.path.join('.', file)
+                break
+
+    # Verifica esistenza
+    if not os.path.exists(CSV_STOCK_PATH):
+        print(f"{Fore.RED}✗ CSV Stock non trovato: {CSV_STOCK_PATH}{Style.RESET_ALL}")
+        print("  Cerca nella cartella corrente file con 'stock' nel nome o 'produced.csv'")
         sys.exit(1)
-    
-    main_pdf_report(csv_path)
+
+    if not os.path.exists(CSV_PACKED_PATH):
+        print(f"{Fore.RED}✗ CSV Packed non trovato: {CSV_PACKED_PATH}{Style.RESET_ALL}")
+        print("  Cerca nella cartella corrente file con 'packed' nel nome")
+        sys.exit(1)
+
+    print(f"✓ CSV Stock:  {os.path.basename(CSV_STOCK_PATH)}")
+    print(f"✓ CSV Packed: {os.path.basename(CSV_PACKED_PATH)}\n")
+
+    main_pdf_report(CSV_STOCK_PATH, CSV_PACKED_PATH)

@@ -18,18 +18,33 @@ IS_LINUX = sys.platform.startswith('linux')
 # Determina il percorso della cartella di lavoro
 if IS_WINDOWS:
     # Path fisso per Windows
-    CSV_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\produced.csv"
+    CSV_STOCK_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\produced_stock_only.csv"
+    CSV_PACKED_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\packed_hourly.csv"
     OUTPUT_DIR = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App"
 else:
-    CSV_PATH = '/mnt/user-data/uploads/produced.csv'
+    CSV_STOCK_PATH = '/mnt/user-data/uploads/produced_stock_only.csv'
+    CSV_PACKED_PATH = '/mnt/user-data/uploads/packed_hourly.csv'
     OUTPUT_DIR = '/mnt/user-data/outputs'
 
-# Se il CSV non esiste, prova a trovarlo
-if not os.path.exists(CSV_PATH):
-    print(f"⚠️ CSV non trovato in: {CSV_PATH}")
+# Se i CSV non esistono, prova a trovarli nella cartella corrente
+if not os.path.exists(CSV_STOCK_PATH):
+    print(f"⚠️ CSV Stock non trovato in: {CSV_STOCK_PATH}")
     for file in os.listdir('.'):
-        if file == 'produced.csv':
-            CSV_PATH = os.path.join('.', file)
+        if 'stock' in file.lower() and file.endswith('.csv'):
+            CSV_STOCK_PATH = os.path.join('.', file)
+            print(f"   Trovato: {CSV_STOCK_PATH}")
+            break
+        elif file == 'produced.csv':
+            CSV_STOCK_PATH = os.path.join('.', file)
+            print(f"   Trovato: {CSV_STOCK_PATH}")
+            break
+
+if not os.path.exists(CSV_PACKED_PATH):
+    print(f"⚠️ CSV Packed non trovato in: {CSV_PACKED_PATH}")
+    for file in os.listdir('.'):
+        if 'packed' in file.lower() and file.endswith('.csv'):
+            CSV_PACKED_PATH = os.path.join('.', file)
+            print(f"   Trovato: {CSV_PACKED_PATH}")
             break
 
 # Mapping dei gradi volumetrici standard
@@ -77,9 +92,68 @@ def calc_hl_std(volume_hl, plato, material):
     hl_std = (volume_hl * grado_vol) / grado_std
     return hl_std
 
-def process_all_days(csv_path):
+def aggregate_packed_hourly(df_packed):
+    """Aggrega i dati Packed orari in dati giornalieri"""
+    # Converti timestamp a datetime
+    df_packed['Timestamp'] = pd.to_datetime(df_packed['Timestamp'])
+
+    # Estrai solo la data (senza ora)
+    df_packed['Date'] = df_packed['Timestamp'].dt.date
+
+    # Aggrega per giorno (somma di tutte le ore)
+    packed_daily = df_packed.groupby('Date').agg({
+        'Packed_OW1': 'sum',
+        'Packed_RGB': 'sum',
+        'Packed_OW2': 'sum',
+        'Packed_KEG': 'sum'
+    }).reset_index()
+
+    # Rinomina colonne per compatibilità
+    packed_daily = packed_daily.rename(columns={
+        'Packed_OW1': 'Packed OW1',
+        'Packed_RGB': 'Packed RGB',
+        'Packed_OW2': 'Packed OW2',
+        'Packed_KEG': 'Packed KEG'
+    })
+
+    return packed_daily
+
+def merge_stock_and_packed(df_stock, df_packed):
+    """Unisce i DataFrame Stock/Cisterne e Packed per data"""
+    # Converti Time del DataFrame stock a date
+    df_stock['Date'] = pd.to_datetime(df_stock['Time']).dt.date
+
+    # Merge left join (mantiene tutte le date di Stock)
+    df_merged = df_stock.merge(df_packed, on='Date', how='left')
+
+    # Riempi NaN con 0 per i Packed
+    packed_cols = ['Packed OW1', 'Packed RGB', 'Packed OW2', 'Packed KEG']
+    for col in packed_cols:
+        if col in df_merged.columns:
+            df_merged[col] = df_merged[col].fillna(0)
+
+    # Rimuovi colonna Date temporanea
+    df_merged = df_merged.drop('Date', axis=1)
+
+    return df_merged
+
+def process_all_days(csv_stock_path, csv_packed_path):
     """Processa tutti i giorni e esporta risultati"""
-    df = pd.read_csv(csv_path)
+    print("Caricamento CSV Stock/Cisterne...")
+    df_stock = pd.read_csv(csv_stock_path)
+
+    print("Caricamento CSV Packed (orario)...")
+    df_packed = pd.read_csv(csv_packed_path)
+
+    print(f"  CSV Packed: {len(df_packed)} righe orarie")
+
+    print("Aggregazione dati Packed orari → giornalieri...")
+    packed_daily = aggregate_packed_hourly(df_packed)
+    print(f"  Aggregati in {len(packed_daily)} giorni")
+
+    print("Merge dei due DataFrame...")
+    df = merge_stock_and_packed(df_stock, packed_daily)
+    print(f"  DataFrame finale: {len(df)} righe\n")
 
     # Gestione interattiva dei valori NaN
     df = handle_missing_values(df)
@@ -262,16 +336,30 @@ def process_all_days(csv_path):
     print(f"{'='*60}\n")
 
 if __name__ == '__main__':
+    print("="*60)
+    print("PRODUCED CALCULATOR - Dual CSV Mode")
+    print("="*60)
     print(f"Sistema: {'Windows' if IS_WINDOWS else 'Linux/Mac'}")
     print(f"Cartella di lavoro: {OUTPUT_DIR}\n")
-    
-    if not os.path.exists(CSV_PATH):
-        print(f"❌ File CSV non trovato: {CSV_PATH}")
-        print(f"   Assicurati che 'produced.csv' sia nella cartella: {OUTPUT_DIR}")
+
+    # Verifica esistenza entrambi i CSV
+    if not os.path.exists(CSV_STOCK_PATH):
+        print(f"❌ CSV Stock non trovato: {CSV_STOCK_PATH}")
+        print(f"   Assicurati che il file Stock/Cisterne sia disponibile")
         sys.exit(1)
-    
+
+    if not os.path.exists(CSV_PACKED_PATH):
+        print(f"❌ CSV Packed non trovato: {CSV_PACKED_PATH}")
+        print(f"   Assicurati che il file Packed (orario) sia disponibile")
+        sys.exit(1)
+
+    print(f"✓ CSV Stock:  {os.path.basename(CSV_STOCK_PATH)}")
+    print(f"✓ CSV Packed: {os.path.basename(CSV_PACKED_PATH)}\n")
+
     try:
-        process_all_days(CSV_PATH)
+        process_all_days(CSV_STOCK_PATH, CSV_PACKED_PATH)
     except Exception as e:
         print(f"\n❌ Errore: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)

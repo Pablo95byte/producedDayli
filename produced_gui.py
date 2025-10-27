@@ -987,12 +987,9 @@ class ProducedGUI:
             # Importa modulo PDF
             from produced_pdf_report import ReportPDFProduced
 
-            # Crea report con i dati già caricati
+            # Crea report con i dati già caricati (passa DataFrame direttamente)
             self._pdf_log("Inizializzazione report...")
-            report = ReportPDFProduced(self.csv_path)
-
-            # Usa i dati già elaborati
-            report.df = self.df.copy()
+            report = ReportPDFProduced(csv_path=self.csv_path, df=self.df.copy())
 
             # Calcola produced (usa i risultati già calcolati)
             self._pdf_log("Preparazione dati per PDF...")
