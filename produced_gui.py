@@ -833,26 +833,34 @@ class ProducedGUI:
 
             report.genera_pdf_report()
 
-            # Trova il file generato
-            import os
-            if IS_WINDOWS:
-                pdf_path = os.path.join(r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App",
-                                       'produced_report.pdf')
-            else:
-                pdf_path = '/mnt/user-data/outputs/produced_report.pdf'
+            # Determina il percorso del file generato
+            from datetime import datetime
+            data_generazione = datetime.now().strftime('%Y-%m-%d')
+            filename = f'report_produced_{data_generazione}_PA.pdf'
 
-            # Se non esiste, cerca nella cartella corrente
-            if not os.path.exists(pdf_path):
-                pdf_path = os.path.join(os.path.dirname(self.csv_path or '.'), 'produced_report.pdf')
+            if IS_WINDOWS:
+                base_dir = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App"
+            else:
+                base_dir = '/mnt/user-data/outputs'
+
+            report_dir = os.path.join(base_dir, 'report')
+            pdf_path = os.path.join(report_dir, filename)
+
+            # Se non esiste, cerca nella cartella del CSV
+            if not os.path.exists(pdf_path) and self.csv_path:
+                report_dir = os.path.join(os.path.dirname(self.csv_path), 'report')
+                pdf_path = os.path.join(report_dir, filename)
 
             self._pdf_log(f"\n✓ Report PDF generato con successo!")
-            self._pdf_log(f"  Percorso: {pdf_path}")
+            self._pdf_log(f"  Nome file: {filename}")
+            self._pdf_log(f"  Cartella: {report_dir}")
 
             self.set_status("Report PDF generato")
             messagebox.showinfo("Successo",
                                f"Report PDF generato con successo!\n\n"
-                               f"File: produced_report.pdf\n"
-                               f"Percorso: {os.path.dirname(pdf_path)}")
+                               f"File: {filename}\n"
+                               f"Cartella: report/\n"
+                               f"Percorso completo:\n{pdf_path}")
 
         except ImportError as e:
             self._pdf_log(f"\n✗ ERRORE: Modulo non trovato")

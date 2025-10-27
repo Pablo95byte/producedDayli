@@ -235,10 +235,17 @@ class ReportPDFProduced:
         if self.df_results is None:
             print(f"{Fore.RED}✗ Calcola i dati prima!{Style.RESET_ALL}")
             return
-        
+
         print(f"\n{Fore.CYAN}Generazione report PDF...{Style.RESET_ALL}")
-        
-        output_path = os.path.join(OUTPUT_DIR, 'produced_report.pdf')
+
+        # Crea cartella report se non esiste
+        report_dir = os.path.join(OUTPUT_DIR, 'report')
+        os.makedirs(report_dir, exist_ok=True)
+
+        # Nome file con data di generazione
+        data_generazione = datetime.now().strftime('%Y-%m-%d')
+        filename = f'report_produced_{data_generazione}_PA.pdf'
+        output_path = os.path.join(report_dir, filename)
         
         with PdfPages(output_path) as pdf:
             # PAGINA 1: Titolo e Sommario

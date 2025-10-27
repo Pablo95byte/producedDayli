@@ -32,3 +32,6 @@ produced_results*.csv
 produced_results*.xlsx
 produced_grafici*.png
 produced_report*.pdf
+
+# Report folder
+report/
