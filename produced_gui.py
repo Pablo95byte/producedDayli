@@ -39,6 +39,7 @@ class ProducedGUI:
         self.df = None
         self.csv_path = None
         self.results_df = None
+        self.data_warning = None  # Warning per dati incompleti
 
         # Crea interfaccia
         self.create_menu_bar()
@@ -169,6 +170,14 @@ class ProducedGUI:
         title = ttk.Label(main_frame, text="Dashboard Risultati",
                          font=('Arial', 16, 'bold'))
         title.pack(pady=10)
+
+        # Frame warning (inizialmente nascosto)
+        self.warning_frame = ttk.LabelFrame(main_frame, text="⚠️ AVVISO DATI", padding="10")
+        self.warning_label = ttk.Label(self.warning_frame, text="",
+                                       foreground='red', font=('Arial', 9),
+                                       wraplength=1000, justify='left')
+        self.warning_label.pack(fill='x')
+        # Non pack il frame ancora - sarà mostrato solo se c'è warning
 
         # Frame statistiche
         stats_frame = ttk.LabelFrame(main_frame, text="Statistiche Generali", padding="10")
@@ -534,6 +543,9 @@ class ProducedGUI:
             # Salva risultati
             self.results_df = pd.DataFrame(results)
 
+            # Controlla completezza dati
+            self._check_data_completeness()
+
             # Aggiorna dashboard
             self.update_dashboard()
 
@@ -541,16 +553,58 @@ class ProducedGUI:
             self.update_chart()
 
             self.set_status(f"Calcolo completato: {len(results)} giorni elaborati")
-            messagebox.showinfo("Successo", f"Calcolo completato!\n{len(results)} giorni elaborati")
+
+            # Messaggio successo con eventuale warning
+            success_msg = f"Calcolo completato!\n{len(results)} giorni elaborati"
+            if self.data_warning:
+                success_msg += f"\n\n⚠️ ATTENZIONE:\n{self.data_warning}"
+                messagebox.showwarning("Completato con avvisi", success_msg)
+            else:
+                messagebox.showinfo("Successo", success_msg)
 
         except Exception as e:
             self.set_status("Errore durante il calcolo")
             messagebox.showerror("Errore", f"Errore durante il calcolo:\n{str(e)}")
 
+    def _check_data_completeness(self):
+        """Controlla se i dati sono completi o se manca lo stock iniziale del primo giorno"""
+        self.data_warning = None
+
+        if self.results_df is None or len(self.results_df) == 0:
+            return
+
+        # Controlla primo giorno
+        first_day = self.results_df.iloc[0]
+
+        # Se Stock Iniziale = 0 ma Stock Finale > 0, significa che manca il giorno precedente
+        if first_day['Stock_Iniziale'] == 0 and first_day['Stock_Finale'] > 0:
+            first_date = pd.to_datetime(first_day['Data']).strftime('%d-%m-%Y')
+
+            # Calcola quale settimana è affetta
+            first_week = pd.to_datetime(first_day['Data']).isocalendar().week
+            first_year = pd.to_datetime(first_day['Data']).isocalendar().year
+            week_label = f"{first_year}-W{str(first_week).zfill(2)}"
+
+            self.data_warning = (
+                f"Il primo giorno ({first_date}) ha Stock Iniziale = 0.\n"
+                f"Questo indica che il CSV non parte dal giorno 0.\n\n"
+                f"⚠️ Il Produced del primo giorno è IMPRECISO.\n"
+                f"⚠️ I dati della settimana {week_label} potrebbero essere IMPRECISI.\n\n"
+                f"Soluzione: Estrai i dati dal giorno precedente\n"
+                f"o ignora il primo giorno/prima settimana nell'analisi."
+            )
+
     def update_dashboard(self):
         """Aggiorna il dashboard con i risultati"""
         if self.results_df is None:
             return
+
+        # Mostra/nascondi warning
+        if self.data_warning:
+            self.warning_label.config(text=self.data_warning)
+            self.warning_frame.pack(fill='x', pady=5, before=self.warning_frame.master.winfo_children()[2])
+        else:
+            self.warning_frame.pack_forget()
 
         # Aggiorna statistiche
         self.stat_labels['days'].config(text=str(len(self.results_df)))
@@ -567,17 +621,25 @@ class ProducedGUI:
         for item in self.results_tree.get_children():
             self.results_tree.delete(item)
 
+        # Configura tag per primo giorno con warning
+        self.results_tree.tag_configure('warning', background='#ffcccc')
+
         # Popola tabella
-        for _, row in self.results_df.iterrows():
+        for idx, row in self.results_df.iterrows():
+            # Marca primo giorno se c'è warning
+            tags = ()
+            if idx == 0 and self.data_warning:
+                tags = ('warning',)
+
             self.results_tree.insert('', 'end', values=(
-                row['Data'],
+                f"⚠️ {row['Data']}" if (idx == 0 and self.data_warning) else row['Data'],
                 f"{row['Produced']:.2f}",
                 f"{row['Packed']:.2f}",
                 f"{row['Cisterne']:.2f}",
                 f"{row['Stock_Iniziale']:.2f}",
                 f"{row['Stock_Finale']:.2f}",
                 f"{row['Delta_Stock']:.2f}"
-            ))
+            ), tags=tags)
 
     def clear_data(self):
         """Pulisce i dati caricati"""
@@ -690,6 +752,16 @@ class ProducedGUI:
         # Aggiungi tooltip interattivi
         self._add_bar_tooltips(ax, bars, dates, self.results_df['Produced'])
 
+        # Aggiungi nota se c'è warning sui dati
+        if self.data_warning:
+            first_week = pd.to_datetime(self.results_df.iloc[0]['Data']).isocalendar().week
+            first_year = pd.to_datetime(self.results_df.iloc[0]['Data']).isocalendar().year
+            week_label = f"{first_year}-W{str(first_week).zfill(2)}"
+            ax.text(0.98, 0.02, f'⚠️ ATTENZIONE: Primo giorno/settimana {week_label} imprecisi (Stock Iniziale = 0)',
+                   transform=ax.transAxes, fontsize=8, color='red',
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
+                   ha='right', va='bottom')
+
         self.figure.tight_layout()
 
     def _plot_produced_weekly(self):
@@ -726,6 +798,14 @@ class ProducedGUI:
 
         # Tooltip con dettagli (media e giorni)
         self._add_weekly_tooltips(ax, bars, weekly_data)
+
+        # Aggiungi nota se prima settimana è affetta
+        if self.data_warning:
+            first_week_label = weekly_data.iloc[0]['Week_Year']
+            ax.text(0.98, 0.02, f'⚠️ ATTENZIONE: Settimana {first_week_label} potrebbe essere imprecisa (dati incompleti)',
+                   transform=ax.transAxes, fontsize=8, color='red',
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
+                   ha='right', va='bottom')
 
         self.figure.tight_layout()
 
@@ -821,6 +901,7 @@ class ProducedGUI:
             self._pdf_log("Preparazione dati per PDF...")
             report.results = self.results_df.to_dict('records')
             report.df_results = self.results_df.copy()
+            report.data_warning = self.data_warning  # Passa warning al PDF
 
             # Aggiungi colonne settimana se mancano
             if 'Week' not in report.df_results.columns:

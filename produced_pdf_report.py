@@ -47,6 +47,7 @@ class ReportPDFProduced:
 
         self.results = []
         self.df_results = None
+        self.data_warning = None  # Warning per dati incompleti
 
         # Liste tank
         self.BBT_TANKS = [111, 112, 121, 132, 211, 212, 221, 222, 231, 232, 241, 242, 251, 252]
@@ -324,7 +325,14 @@ Media Giornaliera: {self.df_results['Cisterne'].mean():.2f} hl
         
         ax.text(0.1, y_pos, stats_text, ha='left', va='top', fontsize=10,
                 family='monospace', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
-        
+
+        # Aggiungi warning se presente
+        if self.data_warning:
+            warning_text = "⚠️ ATTENZIONE - DATI INCOMPLETI\n\n" + self.data_warning
+            ax.text(0.5, 0.12, warning_text, ha='center', va='top', fontsize=9,
+                   family='monospace', color='red',
+                   bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.8))
+
         pdf.savefig(fig, bbox_inches='tight')
         plt.close(fig)
     
