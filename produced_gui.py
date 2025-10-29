@@ -1474,17 +1474,16 @@ class ProducedGUI:
             data_generazione = datetime.now().strftime('%Y-%m-%d')
             filename = f'report_produced_{data_generazione}_PA.pdf'
 
-            if IS_WINDOWS:
-                base_dir = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App"
-            else:
-                base_dir = '/mnt/user-data/outputs'
+            # Usa la cartella corrente dello script come base (portabile)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            base_dir = os.path.join(script_dir, 'output')
 
             report_dir = os.path.join(base_dir, 'report')
             pdf_path = os.path.join(report_dir, filename)
 
-            # Se non esiste, cerca nella cartella del CSV
-            if not os.path.exists(pdf_path) and self.csv_path:
-                report_dir = os.path.join(os.path.dirname(self.csv_path), 'report')
+            # Se non esiste, cerca nella cartella del CSV Stock
+            if not os.path.exists(pdf_path) and self.stock_csv_path:
+                report_dir = os.path.join(os.path.dirname(self.stock_csv_path), 'report')
                 pdf_path = os.path.join(report_dir, filename)
 
             self._pdf_log(f"\n✓ Report PDF generato con successo!")

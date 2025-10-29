@@ -2,17 +2,23 @@
 
 Sistema di calcolo **Produced giornaliero** con interfaccia grafica interattiva per l'analisi della produzione birra.
 
+**✅ PORTABILE** - Funziona su qualsiasi PC senza path hardcoded!
+
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# Installa dipendenze
-pip install pandas matplotlib colorama
+# 1. Installa dipendenze
+pip install pandas matplotlib colorama openpyxl numpy
 
-# Avvia GUI
+# 2. Metti i 3 CSV nella stessa cartella degli script Python
+
+# 3. Avvia GUI
 python produced_gui.py
 ```
+
+📖 **Per istruzioni dettagliate, leggi [INSTALL.md](INSTALL.md)**
 
 ---
 
@@ -29,17 +35,16 @@ Dove:
 
 ---
 
-## 📊 Architettura Dual CSV
+## 📊 Architettura Triple CSV
 
-Il sistema ora utilizza **2 file CSV separati** per massima flessibilità:
+Il sistema utilizza **3 file CSV separati** per massima flessibilità:
 
-### **CSV 1: Stock e Cisterne (giornaliero)**
+### **CSV 1: Stock (giornaliero)**
 Contiene:
 - Timestamp giornaliero (es: 2025-10-01 00:00:00)
 - Livelli, Plato e Material per tutti i tank (BBT, FST, RBT)
-- Truck1 e Truck2 (Level, Plato)
 
-⚠️ **IMPORTANTE:** Questo CSV **NON contiene più** le colonne Packed (rimosse)
+⚠️ **IMPORTANTE:** Solo tanks - NO Packed, NO Cisterne
 
 ### **CSV 2: Packed (orario) - OBBLIGATORIO**
 Contiene:
@@ -47,6 +52,15 @@ Contiene:
 - Packed_OW1, Packed_RGB, Packed_OW2, Packed_KEG (hl prodotti in quell'ora)
 
 **Frequenza:** 24 righe per giorno (una per ogni ora)
+**Aggregazione:** SOMMA → totale giornaliero
+
+### **CSV 3: Cisterne (orario) - OBBLIGATORIO**
+Contiene:
+- Timestamp orario (es: 2025-10-01 08:00:00, 09:00:00, ...)
+- Truck1_Level, Truck1_Plato, Truck2_Level, Truck2_Plato
+
+**Frequenza:** 24 righe per giorno (una per ogni ora)
+**Aggregazione:** MEDIA → media giornaliera
 
 **Esempio `packed_hourly.csv`:**
 ```csv
@@ -99,21 +113,26 @@ producedDayli/
 
 ## 🎨 Funzionalità GUI
 
-### 1️⃣ Tab "Carica Dati" (Dual CSV Mode)
+### 1️⃣ Tab "Carica Dati" (Triple CSV Mode)
 
-**Caricamento 2 file CSV:**
+**Caricamento 3 file CSV:**
 
-1. **CSV Stock/Cisterne (giornaliero)**
+1. **CSV Stock (giornaliero)** ⚠️ OBBLIGATORIO
    - Seleziona file con browser
-   - Contiene livelli tanks, plato, material
+   - Contiene livelli tanks BBT/FST/RBT, plato, material
 
-2. **CSV Packed (orario) ⚠️ OBBLIGATORIO**
+2. **CSV Packed (orario)** ⚠️ OBBLIGATORIO
    - Seleziona file con browser
-   - Contiene dati Packed ora per ora
+   - Contiene dati Packed ora per ora (OW1, RGB, OW2, KEG)
+
+3. **CSV Cisterne (orario)** ⚠️ OBBLIGATORIO
+   - Seleziona file con browser
+   - Contiene livelli Truck1/Truck2 ora per ora
 
 **Dopo caricamento:**
-- Aggregazione automatica Packed orario → giornaliero
-- Merge automatico dei 2 CSV per data
+- Aggregazione automatica Packed orario → giornaliero (SOMMA)
+- Aggregazione automatica Cisterne orario → giornaliero (MEDIA)
+- Merge automatico dei 3 CSV per data
 - Rilevamento automatico valori NaN
 - Gestione interattiva NaN (4 opzioni):
   - Inserimento manuale
@@ -388,6 +407,52 @@ Quando rileva NaN nel CSV, chiede all'utente come gestirli:
 
 ---
 
+## 🌍 Portabilità - Funziona su Qualsiasi PC!
+
+### ✅ Nessun Path Hardcoded
+
+Il software è completamente **portabile**:
+- Non servono percorsi assoluti Windows specifici
+- Tutto si basa sulla **cartella corrente** dello script
+- Output automaticamente in `./output/`
+
+### 📂 Come Usare su un Nuovo PC
+
+1. **Copia l'intera cartella** del progetto sul PC
+2. **Metti i 3 CSV** nella stessa cartella degli script `.py`
+3. **Avvia** `produced_gui.py` (doppio click o da terminale)
+4. Fatto! 🎉
+
+### 🔍 Auto-Detection dei File
+
+Il sistema cerca automaticamente i CSV se non li trova:
+- Cerca file con `stock` nel nome → CSV Stock
+- Cerca file con `packed` nel nome → CSV Packed
+- Cerca file con `cisterne` nel nome → CSV Cisterne
+
+**Non servono configurazioni!**
+
+### 📊 Output Automatico
+
+Tutti gli output vengono salvati in:
+```
+./output/
+  ├── produced_results_batch.csv
+  ├── produced_results_batch.xlsx
+  └── report/
+      └── report_produced_YYYY-MM-DD_PA.pdf
+```
+
+La cartella `output/` viene **creata automaticamente** nella stessa directory degli script.
+
+### 🛠️ Guida Installazione Completa
+
+Per istruzioni dettagliate su come installare e usare il software su qualsiasi PC, leggi:
+
+📖 **[INSTALL.md](INSTALL.md)** - Guida passo-passo con troubleshooting
+
+---
+
 ## 📧 Supporto
 
 Progetto interno Heineken - Dashboard Assemini
@@ -396,6 +461,7 @@ Per supporto o bug report, contattare il team di sviluppo.
 
 ---
 
-**Versione:** 2.0
-**Ultimo aggiornamento:** 27 Ottobre 2025
+**Versione:** 3.0 - Triple CSV Architecture
+**Ultimo aggiornamento:** 29 Ottobre 2025
 **Developed with Python + tkinter + pandas + matplotlib**
+✅ **Portabile** - Funziona su Windows, Linux, macOS

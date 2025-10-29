@@ -16,17 +16,17 @@ IS_WINDOWS = sys.platform.startswith('win')
 IS_LINUX = sys.platform.startswith('linux')
 
 # Determina il percorso della cartella di lavoro
-if IS_WINDOWS:
-    # Path fisso per Windows
-    CSV_STOCK_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\produced_stock_only.csv"
-    CSV_PACKED_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\packed_hourly.csv"
-    CSV_CISTERNE_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\cisterne_hourly.csv"
-    OUTPUT_DIR = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App"
-else:
-    CSV_STOCK_PATH = '/mnt/user-data/uploads/produced_stock_only.csv'
-    CSV_PACKED_PATH = '/mnt/user-data/uploads/packed_hourly.csv'
-    CSV_CISTERNE_PATH = '/mnt/user-data/uploads/cisterne_hourly.csv'
-    OUTPUT_DIR = '/mnt/user-data/outputs'
+# Usa la cartella corrente come default (portabile su qualsiasi PC)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, 'output')
+
+# Path di default (verranno cercati automaticamente se non esistono)
+CSV_STOCK_PATH = os.path.join(SCRIPT_DIR, 'produced_stock_only.csv')
+CSV_PACKED_PATH = os.path.join(SCRIPT_DIR, 'packed_hourly.csv')
+CSV_CISTERNE_PATH = os.path.join(SCRIPT_DIR, 'cisterne_hourly.csv')
+
+# Crea cartella output se non esiste
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Se i CSV non esistono, prova a trovarli nella cartella corrente
 if not os.path.exists(CSV_STOCK_PATH):
