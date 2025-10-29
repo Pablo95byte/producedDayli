@@ -888,6 +888,10 @@ class ProducedGUI:
             lines.append(f"🍺 PRODUCED TOTALE: {produced:,.2f} hl")
             lines.append(f"")
 
+            # Helper per calcolare percentuali (evita divisione per zero)
+            def calc_perc(value, total):
+                return (value / total * 100) if total != 0 else 0.0
+
             # === BREAKDOWN COMPONENTI ===
             lines.append("┌─ BREAKDOWN COMPONENTI ─────────────────────────────────────────────────────┐")
             lines.append("│")
@@ -905,7 +909,7 @@ class ProducedGUI:
             lines.append(f"│    OW2:     {packed_ow2:10,.2f} hl")
             lines.append(f"│    KEG:     {packed_keg:10,.2f} hl")
             lines.append(f"│    ────────────────────────")
-            lines.append(f"│    TOTALE:  {packed_total:10,.2f} hl  ({packed_total/produced*100:5.1f}%)")
+            lines.append(f"│    TOTALE:  {packed_total:10,.2f} hl  ({calc_perc(packed_total, produced):5.1f}%)")
             lines.append(f"│")
 
             # CISTERNE
@@ -919,7 +923,7 @@ class ProducedGUI:
             lines.append(f"│    Truck2:    {truck2_hl:10,.2f} hl std")
             lines.append(f"│    ────────────────────────")
             lines.append(f"│    Totale:    {cisterne_total:10,.2f} hl std")
-            lines.append(f"│    /2:        {cisterne_contrib:10,.2f} hl  ({cisterne_contrib/produced*100:5.1f}%)")
+            lines.append(f"│    /2:        {cisterne_contrib:10,.2f} hl  ({calc_perc(cisterne_contrib, produced):5.1f}%)")
             lines.append(f"│")
 
             # DELTA STOCK
@@ -935,7 +939,7 @@ class ProducedGUI:
             lines.append(f"│    Stock Finale:    {stock_fin:10,.2f} hl std")
             lines.append(f"│    ────────────────────────")
             lines.append(f"│    Delta:           {delta_stock:10,.2f} hl std  {stock_trend}")
-            lines.append(f"│    /2:              {delta_contrib:10,.2f} hl  ({abs(delta_contrib)/produced*100:5.1f}%)")
+            lines.append(f"│    /2:              {delta_contrib:10,.2f} hl  ({calc_perc(abs(delta_contrib), produced):5.1f}%)")
             lines.append(f"│")
             lines.append(f"└────────────────────────────────────────────────────────────────────────────┘")
             lines.append(f"")
