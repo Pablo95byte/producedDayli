@@ -38,8 +38,10 @@ class ProducedGUI:
         # Variabili di stato
         self.df = None
         self.df_packed = None  # DataFrame Packed orario
+        self.df_cisterne = None  # DataFrame Cisterne orario
         self.csv_path = None
         self.packed_csv_path = None  # Path CSV Packed
+        self.cisterne_csv_path = None  # Path CSV Cisterne
         self.results_df = None
         self.data_warning = None  # Warning per dati incompleti
 
@@ -124,19 +126,19 @@ class ProducedGUI:
         main_frame.pack(fill='both', expand=True)
 
         # Titolo
-        title = ttk.Label(main_frame, text="Caricamento Dati CSV (Dual Mode)",
+        title = ttk.Label(main_frame, text="Caricamento Dati CSV (Triple Mode)",
                          font=('Arial', 16, 'bold'))
         title.pack(pady=10)
 
         # Sottotitolo esplicativo
         subtitle = ttk.Label(main_frame,
-                            text="Carica 2 file: Stock/Cisterne (giornaliero) + Packed (orario)",
+                            text="Carica 3 file: Stock (giornaliero) + Packed (orario) + Cisterne (orario)",
                             font=('Arial', 9, 'italic'),
                             foreground='gray')
         subtitle.pack(pady=5)
 
-        # Frame selezione file 1 - STOCK/CISTERNE
-        file_frame1 = ttk.LabelFrame(main_frame, text="1️⃣ CSV Stock e Cisterne (giornaliero)", padding="10")
+        # Frame selezione file 1 - STOCK ONLY
+        file_frame1 = ttk.LabelFrame(main_frame, text="1️⃣ CSV Stock Tanks (giornaliero)", padding="10")
         file_frame1.pack(fill='x', pady=10)
 
         self.csv_path_var = tk.StringVar(value="Nessun file selezionato")
@@ -160,6 +162,19 @@ class ProducedGUI:
         browse_btn2 = ttk.Button(file_frame2, text="Sfoglia...",
                                command=self.browse_packed_csv)
         browse_btn2.pack(side='right', padx=5)
+
+        # Frame selezione file 3 - CISTERNE (OBBLIGATORIO)
+        file_frame3 = ttk.LabelFrame(main_frame, text="3️⃣ CSV Cisterne (orario) ⚠️ OBBLIGATORIO", padding="10")
+        file_frame3.pack(fill='x', pady=10)
+
+        self.cisterne_csv_path_var = tk.StringVar(value="Nessun file selezionato")
+        path_label3 = ttk.Label(file_frame3, textvariable=self.cisterne_csv_path_var,
+                              foreground='gray', wraplength=800)
+        path_label3.pack(side='left', padx=5)
+
+        browse_btn3 = ttk.Button(file_frame3, text="Sfoglia...",
+                               command=self.browse_cisterne_csv)
+        browse_btn3.pack(side='right', padx=5)
 
         # Frame info dati caricati
         self.info_frame = ttk.LabelFrame(main_frame, text="Informazioni Dati", padding="10")
@@ -471,6 +486,16 @@ class ProducedGUI:
             self.packed_csv_path = filename
             self.packed_csv_path_var.set(filename)
 
+    def browse_cisterne_csv(self):
+        """Apre dialog per selezionare CSV Cisterne orario"""
+        filename = filedialog.askopenfilename(
+            title="Seleziona CSV Cisterne (orario)",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        if filename:
+            self.cisterne_csv_path = filename
+            self.cisterne_csv_path_var.set(filename)
+
     def load_csv(self):
         """Carica CSV dal menu"""
         self.browse_csv()
@@ -479,9 +504,9 @@ class ProducedGUI:
 
     def load_and_analyze(self):
         """Carica i CSV e analizza i dati"""
-        # Verifica che entrambi i file siano selezionati
+        # Verifica che TUTTI i file siano selezionati
         if not self.csv_path:
-            messagebox.showwarning("Attenzione", "Seleziona il file CSV Stock/Cisterne")
+            messagebox.showwarning("Attenzione", "Seleziona il file CSV Stock (giornaliero)")
             return
 
         if not self.packed_csv_path:
@@ -490,33 +515,49 @@ class ProducedGUI:
                                  "Il file Packed è OBBLIGATORIO per calcolare il Produced!")
             return
 
+        if not self.cisterne_csv_path:
+            messagebox.showwarning("Attenzione",
+                                 "Seleziona il file CSV Cisterne (orario)\n\n"
+                                 "Il file Cisterne è OBBLIGATORIO per calcolare il Produced!")
+            return
+
         try:
             self.set_status("Caricamento CSV in corso...", show_progress=True)
 
-            # === CARICA CSV 1: STOCK/CISTERNE (giornaliero) ===
+            # === CARICA CSV 1: STOCK TANKS (giornaliero) ===
             self.df = pd.read_csv(self.csv_path)
 
             # === CARICA CSV 2: PACKED (orario) ===
             self.df_packed = pd.read_csv(self.packed_csv_path)
 
+            # === CARICA CSV 3: CISTERNE (orario) ===
+            self.df_cisterne = pd.read_csv(self.cisterne_csv_path)
+
             # === AGGREGA PACKED ORARIO → GIORNALIERO ===
             self.set_status("Aggregazione dati Packed orari...", show_progress=True)
             packed_daily = self._aggregate_packed_hourly()
 
-            # === MERGE DEI DUE DATAFRAME ===
-            self.set_status("Unione dati Stock e Packed...", show_progress=True)
-            self.df = self._merge_stock_and_packed(self.df, packed_daily)
+            # === AGGREGA CISTERNE ORARIO → GIORNALIERO ===
+            self.set_status("Aggregazione dati Cisterne orari...", show_progress=True)
+            cisterne_daily = self._aggregate_cisterne_hourly()
+
+            # === MERGE DEI TRE DATAFRAME ===
+            self.set_status("Unione dati Stock, Packed e Cisterne...", show_progress=True)
+            self.df = self._merge_stock_packed_cisterne(self.df, packed_daily, cisterne_daily)
 
             # Analizza NaN (su DataFrame unito)
             handler = NaNHandler(self.df)
             missing_report = handler.detect_missing_values()
 
             # Mostra info
-            info = f"✅ CSV Stock/Cisterne: {os.path.basename(self.csv_path)}\n"
+            info = f"✅ CSV Stock Tanks: {os.path.basename(self.csv_path)}\n"
             info += f"   Righe: {len(self.df)}\n\n"
             info += f"✅ CSV Packed (orario): {os.path.basename(self.packed_csv_path)}\n"
             info += f"   Righe orarie: {len(self.df_packed)}\n"
             info += f"   Giorni aggregati: {len(packed_daily)}\n\n"
+            info += f"✅ CSV Cisterne (orario): {os.path.basename(self.cisterne_csv_path)}\n"
+            info += f"   Righe orarie: {len(self.df_cisterne)}\n"
+            info += f"   Giorni aggregati: {len(cisterne_daily)}\n\n"
 
             if missing_report:
                 info += f"⚠️ ATTENZIONE: Rilevati {len(missing_report)} valori NaN!\n\n"
@@ -617,6 +658,106 @@ class ProducedGUI:
         packed_daily = packed_daily.rename(columns=packed_cols_map)
 
         return packed_daily
+
+    def _aggregate_cisterne_hourly(self):
+        """Aggrega i dati Cisterne orari in dati giornalieri"""
+        # Trova la colonna temporale
+        time_col = None
+        possible_time_cols = ['Timestamp', 'Time', 'DateTime', 'Date', 'timestamp', 'time', 'datetime']
+
+        for col in possible_time_cols:
+            if col in self.df_cisterne.columns:
+                time_col = col
+                break
+
+        if time_col is None:
+            time_col = self.df_cisterne.columns[0]
+            messagebox.showwarning(
+                "Attenzione",
+                f"Colonna temporale non trovata nel CSV Cisterne.\n"
+                f"Uso prima colonna: {time_col}\n\n"
+                f"Colonne trovate: {', '.join(self.df_cisterne.columns)}"
+            )
+
+        # Converti timestamp a datetime
+        try:
+            self.df_cisterne[time_col] = pd.to_datetime(self.df_cisterne[time_col])
+        except Exception as e:
+            raise ValueError(
+                f"❌ Errore conversione timestamp nella colonna '{time_col}'!\n\n"
+                f"Formato richiesto: YYYY-MM-DD HH:MM:SS\n"
+                f"Esempio: 2025-10-01 08:00:00\n\n"
+                f"Errore: {str(e)}"
+            )
+
+        # Estrai solo la data (senza ora)
+        self.df_cisterne['Date'] = self.df_cisterne[time_col].dt.date
+
+        # Trova colonne Cisterne (Truck1 e Truck2 con Level e Plato)
+        cisterne_cols_map = {}
+        for orig_name, target_name in [
+            ('Truck1_Level', 'Truck1 Level'),
+            ('Truck1Level', 'Truck1 Level'),
+            ('Truck1 Level', 'Truck1 Level'),
+            ('Truck1_Plato', 'Truck1 Average Plato'),
+            ('Truck1Plato', 'Truck1 Average Plato'),
+            ('Truck1 Plato', 'Truck1 Average Plato'),
+            ('Truck1 Average Plato', 'Truck1 Average Plato'),
+            ('Truck2_Level', 'Truck2 Level'),
+            ('Truck2Level', 'Truck2 Level'),
+            ('Truck2 Level', 'Truck2 Level'),
+            ('Truck2_Plato', 'Truck2 Average Plato'),
+            ('Truck2Plato', 'Truck2 Average Plato'),
+            ('Truck2 Plato', 'Truck2 Average Plato'),
+            ('Truck2 Average Plato', 'Truck2 Average Plato'),
+        ]:
+            if orig_name in self.df_cisterne.columns:
+                cisterne_cols_map[orig_name] = target_name
+
+        if not cisterne_cols_map:
+            raise ValueError(
+                f"❌ Colonne Cisterne non trovate nel CSV!\n\n"
+                f"Colonne richieste: Truck1_Level, Truck1_Plato, Truck2_Level, Truck2_Plato\n"
+                f"Colonne trovate nel CSV: {', '.join(self.df_cisterne.columns)}\n\n"
+                f"Verifica il formato del CSV Cisterne."
+            )
+
+        # Aggrega per giorno (media per Level e Plato)
+        agg_dict = {col: 'mean' for col in cisterne_cols_map.keys()}
+        cisterne_daily = self.df_cisterne.groupby('Date').agg(agg_dict).reset_index()
+
+        # Rinomina colonne per compatibilità
+        cisterne_daily = cisterne_daily.rename(columns=cisterne_cols_map)
+
+        return cisterne_daily
+
+    def _merge_stock_packed_cisterne(self, df_stock, df_packed, df_cisterne):
+        """Unisce i 3 DataFrame (Stock, Packed, Cisterne) per data"""
+        # Converti Time del DataFrame stock a date
+        df_stock['Date'] = pd.to_datetime(df_stock['Time']).dt.date
+
+        # Merge 1: Stock + Packed
+        df_merged = df_stock.merge(df_packed, on='Date', how='left')
+
+        # Riempi NaN con 0 per i Packed
+        packed_cols = ['Packed OW1', 'Packed RGB', 'Packed OW2', 'Packed KEG']
+        for col in packed_cols:
+            if col in df_merged.columns:
+                df_merged[col] = df_merged[col].fillna(0)
+
+        # Merge 2: (Stock + Packed) + Cisterne
+        df_merged = df_merged.merge(df_cisterne, on='Date', how='left')
+
+        # Riempi NaN con 0 per le Cisterne
+        cisterne_cols = ['Truck1 Level', 'Truck1 Average Plato', 'Truck2 Level', 'Truck2 Average Plato']
+        for col in cisterne_cols:
+            if col in df_merged.columns:
+                df_merged[col] = df_merged[col].fillna(0)
+
+        # Rimuovi colonna Date temporanea
+        df_merged = df_merged.drop('Date', axis=1)
+
+        return df_merged
 
     def _merge_stock_and_packed(self, df_stock, df_packed):
         """Unisce i DataFrame Stock/Cisterne e Packed per data"""
@@ -1042,9 +1183,15 @@ class ProducedGUI:
     def clear_data(self):
         """Pulisce i dati caricati"""
         self.df = None
+        self.df_packed = None
+        self.df_cisterne = None
         self.results_df = None
         self.csv_path = None
+        self.packed_csv_path = None
+        self.cisterne_csv_path = None
         self.csv_path_var.set("Nessun file selezionato")
+        self.packed_csv_path_var.set("Nessun file selezionato")
+        self.cisterne_csv_path_var.set("Nessun file selezionato")
         self.update_info_text("")
         self.set_status("Pronto")
 
