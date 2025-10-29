@@ -20,10 +20,12 @@ if IS_WINDOWS:
     # Path fisso per Windows
     CSV_STOCK_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\produced_stock_only.csv"
     CSV_PACKED_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\packed_hourly.csv"
+    CSV_CISTERNE_PATH = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App\cisterne_hourly.csv"
     OUTPUT_DIR = r"C:\Users\arup01\OneDrive - Heineken International\Documents - Dashboard Assemini\General\producedGiornaliero\App"
 else:
     CSV_STOCK_PATH = '/mnt/user-data/uploads/produced_stock_only.csv'
     CSV_PACKED_PATH = '/mnt/user-data/uploads/packed_hourly.csv'
+    CSV_CISTERNE_PATH = '/mnt/user-data/uploads/cisterne_hourly.csv'
     OUTPUT_DIR = '/mnt/user-data/outputs'
 
 # Importa matplotlib
@@ -39,34 +41,41 @@ except ImportError:
     sys.exit(1)
 
 class ReportPDFProduced:
-    def __init__(self, csv_path=None, df=None, csv_stock_path=None, csv_packed_path=None):
+    def __init__(self, csv_path=None, df=None, csv_stock_path=None, csv_packed_path=None, csv_cisterne_path=None):
         """
-        Inizializza il generatore di report PDF
+        Inizializza il generatore di report PDF (Triple CSV Mode)
 
         Args:
             csv_path: Path del CSV unificato (deprecato, per retrocompatibilità GUI)
             df: DataFrame già mergato (usato dalla GUI)
-            csv_stock_path: Path CSV Stock/Cisterne (per uso standalone)
-            csv_packed_path: Path CSV Packed orario (per uso standalone)
+            csv_stock_path: Path CSV Stock (solo BBT/FST/RBT)
+            csv_packed_path: Path CSV Packed orario
+            csv_cisterne_path: Path CSV Cisterne orario
         """
         self.csv_path = csv_path
 
         # Se viene passato un DataFrame, usalo direttamente
         if df is not None:
             self.df = df
-        # Altrimenti, carica e mergia i CSV
-        elif csv_stock_path and csv_packed_path:
-            print("Caricamento CSV Stock/Cisterne...")
+        # Altrimenti, carica e mergia i 3 CSV
+        elif csv_stock_path and csv_packed_path and csv_cisterne_path:
+            print("Caricamento CSV Stock (solo BBT/FST/RBT)...")
             df_stock = pd.read_csv(csv_stock_path)
 
             print("Caricamento CSV Packed (orario)...")
             df_packed = pd.read_csv(csv_packed_path)
 
-            print("Aggregazione dati Packed...")
+            print("Caricamento CSV Cisterne (orario)...")
+            df_cisterne = pd.read_csv(csv_cisterne_path)
+
+            print("Aggregazione dati Packed (SOMMA)...")
             packed_daily = self._aggregate_packed_hourly(df_packed)
 
-            print("Merge dei DataFrame...")
-            self.df = self._merge_stock_and_packed(df_stock, packed_daily)
+            print("Aggregazione dati Cisterne (MEDIA)...")
+            cisterne_daily = self._aggregate_cisterne_hourly(df_cisterne)
+
+            print("Merge dei 3 DataFrame...")
+            self.df = self._merge_stock_packed_cisterne(df_stock, packed_daily, cisterne_daily)
 
             # Gestione interattiva dei valori NaN
             self.df = handle_missing_values(self.df)
@@ -75,7 +84,7 @@ class ReportPDFProduced:
             self.df = pd.read_csv(csv_path)
             self.df = handle_missing_values(self.df)
         else:
-            raise ValueError("Devi fornire df, oppure (csv_stock_path + csv_packed_path), oppure csv_path")
+            raise ValueError("Devi fornire df, oppure (csv_stock_path + csv_packed_path + csv_cisterne_path), oppure csv_path")
 
         self.results = []
         self.df_results = None
@@ -151,17 +160,97 @@ class ReportPDFProduced:
 
         return packed_daily
 
-    def _merge_stock_and_packed(self, df_stock, df_packed):
-        """Unisce i DataFrame Stock/Cisterne e Packed per data"""
+    def _aggregate_cisterne_hourly(self, df_cisterne):
+        """Aggrega i dati Cisterne orari in dati giornalieri (MEDIA, non somma)"""
+        # Trova la colonna temporale
+        time_col = None
+        possible_time_cols = ['Timestamp', 'Time', 'DateTime', 'Date', 'timestamp', 'time', 'datetime']
+
+        for col in possible_time_cols:
+            if col in df_cisterne.columns:
+                time_col = col
+                break
+
+        if time_col is None:
+            time_col = df_cisterne.columns[0]
+            print(f"⚠️ Colonna temporale non trovata, uso: {time_col}")
+
+        # Converti timestamp a datetime
+        try:
+            df_cisterne[time_col] = pd.to_datetime(df_cisterne[time_col])
+        except Exception as e:
+            raise ValueError(
+                f"❌ Errore conversione timestamp nella colonna '{time_col}'!\n"
+                f"Formato richiesto: YYYY-MM-DD HH:MM:SS\n"
+                f"Errore: {str(e)}"
+            )
+
+        # Estrai solo la data (senza ora)
+        df_cisterne['Date'] = df_cisterne[time_col].dt.date
+
+        # Trova colonne Cisterne con vari formati possibili
+        cisterne_cols_map = {}
+        for orig_name, target_name in [
+            ('Truck1_Level', 'Truck1 Level'),
+            ('Truck1Level', 'Truck1 Level'),
+            ('Truck1 Level', 'Truck1 Level'),
+            ('Truck1_Plato', 'Truck1 Average Plato'),
+            ('Truck1Plato', 'Truck1 Average Plato'),
+            ('Truck1 Plato', 'Truck1 Average Plato'),
+            ('Truck1_Average_Plato', 'Truck1 Average Plato'),
+            ('Truck2_Level', 'Truck2 Level'),
+            ('Truck2Level', 'Truck2 Level'),
+            ('Truck2 Level', 'Truck2 Level'),
+            ('Truck2_Plato', 'Truck2 Average Plato'),
+            ('Truck2Plato', 'Truck2 Average Plato'),
+            ('Truck2 Plato', 'Truck2 Average Plato'),
+            ('Truck2_Average_Plato', 'Truck2 Average Plato'),
+        ]:
+            if orig_name in df_cisterne.columns:
+                cisterne_cols_map[orig_name] = target_name
+
+        if not cisterne_cols_map:
+            raise ValueError(
+                f"❌ Colonne Cisterne non trovate!\n"
+                f"Richieste: Truck1_Level, Truck1_Plato, Truck2_Level, Truck2_Plato\n"
+                f"Trovate: {', '.join(df_cisterne.columns)}"
+            )
+
+        # Aggrega per giorno (MEDIA di tutte le ore, non somma!)
+        agg_dict = {col: 'mean' for col in cisterne_cols_map.keys()}
+        cisterne_daily = df_cisterne.groupby('Date').agg(agg_dict).reset_index()
+
+        # Rinomina colonne per compatibilità
+        cisterne_daily = cisterne_daily.rename(columns=cisterne_cols_map)
+
+        return cisterne_daily
+
+    def _merge_stock_packed_cisterne(self, df_stock, df_packed, df_cisterne):
+        """Unisce i 3 DataFrame (Stock, Packed, Cisterne) per data"""
+        # Converti Time del DataFrame stock a date
         df_stock['Date'] = pd.to_datetime(df_stock['Time']).dt.date
+
+        # Merge 1: Stock + Packed (left join)
         df_merged = df_stock.merge(df_packed, on='Date', how='left')
 
+        # Riempi NaN con 0 per i Packed
         packed_cols = ['Packed OW1', 'Packed RGB', 'Packed OW2', 'Packed KEG']
         for col in packed_cols:
             if col in df_merged.columns:
                 df_merged[col] = df_merged[col].fillna(0)
 
+        # Merge 2: (Stock + Packed) + Cisterne (left join)
+        df_merged = df_merged.merge(df_cisterne, on='Date', how='left')
+
+        # Riempi NaN con 0 per le Cisterne
+        cisterne_cols = ['Truck1 Level', 'Truck1 Average Plato', 'Truck2 Level', 'Truck2 Average Plato']
+        for col in cisterne_cols:
+            if col in df_merged.columns:
+                df_merged[col] = df_merged[col].fillna(0)
+
+        # Rimuovi colonna Date temporanea
         df_merged = df_merged.drop('Date', axis=1)
+
         return df_merged
     
     def plato_to_volumetric(self, plato):
@@ -836,12 +925,12 @@ Material: {int(df_rbt252['Material'].mode()[0]) if len(df_rbt252) > 0 and pd.not
         pdf.savefig(fig, bbox_inches='tight')
         plt.close(fig)
 
-def main_pdf_report(csv_stock_path, csv_packed_path):
-    """Funzione principale per generare report PDF"""
+def main_pdf_report(csv_stock_path, csv_packed_path, csv_cisterne_path):
+    """Funzione principale per generare report PDF (Triple CSV Mode)"""
     print("="*60)
-    print("PRODUCED CALCULATOR - Report PDF (Dual CSV)")
+    print("PRODUCED CALCULATOR - Report PDF (Triple CSV)")
     print("="*60)
-    report = ReportPDFProduced(csv_stock_path=csv_stock_path, csv_packed_path=csv_packed_path)
+    report = ReportPDFProduced(csv_stock_path=csv_stock_path, csv_packed_path=csv_packed_path, csv_cisterne_path=csv_cisterne_path)
     report.calcola_produced()
     report.genera_pdf_report()
     print(f"{Fore.GREEN}✓ Report PDF completato!{Style.RESET_ALL}\n")
@@ -865,7 +954,14 @@ if __name__ == '__main__':
                 CSV_PACKED_PATH = os.path.join('.', file)
                 break
 
-    # Verifica esistenza
+    if not os.path.exists(CSV_CISTERNE_PATH):
+        # Cerca nella cartella corrente
+        for file in os.listdir('.'):
+            if 'cisterne' in file.lower() and file.endswith('.csv'):
+                CSV_CISTERNE_PATH = os.path.join('.', file)
+                break
+
+    # Verifica esistenza tutti e 3 i CSV
     if not os.path.exists(CSV_STOCK_PATH):
         print(f"{Fore.RED}✗ CSV Stock non trovato: {CSV_STOCK_PATH}{Style.RESET_ALL}")
         print("  Cerca nella cartella corrente file con 'stock' nel nome o 'produced.csv'")
@@ -876,7 +972,13 @@ if __name__ == '__main__':
         print("  Cerca nella cartella corrente file con 'packed' nel nome")
         sys.exit(1)
 
-    print(f"✓ CSV Stock:  {os.path.basename(CSV_STOCK_PATH)}")
-    print(f"✓ CSV Packed: {os.path.basename(CSV_PACKED_PATH)}\n")
+    if not os.path.exists(CSV_CISTERNE_PATH):
+        print(f"{Fore.RED}✗ CSV Cisterne non trovato: {CSV_CISTERNE_PATH}{Style.RESET_ALL}")
+        print("  Cerca nella cartella corrente file con 'cisterne' nel nome")
+        sys.exit(1)
 
-    main_pdf_report(CSV_STOCK_PATH, CSV_PACKED_PATH)
+    print(f"✓ CSV Stock:    {os.path.basename(CSV_STOCK_PATH)}")
+    print(f"✓ CSV Packed:   {os.path.basename(CSV_PACKED_PATH)}")
+    print(f"✓ CSV Cisterne: {os.path.basename(CSV_CISTERNE_PATH)}\n")
+
+    main_pdf_report(CSV_STOCK_PATH, CSV_PACKED_PATH, CSV_CISTERNE_PATH)
