@@ -97,17 +97,22 @@ class ProducedGUI:
         self.notebook.add(self.tab_dashboard, text="📊 Dashboard")
         self.create_dashboard_tab()
 
-        # Tab 3: Grafici
+        # Tab 3: Analisi Giornaliera
+        self.tab_analysis = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_analysis, text="🔍 Analisi Giornaliera")
+        self.create_analysis_tab()
+
+        # Tab 4: Grafici
         self.tab_charts = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_charts, text="📈 Grafici")
         self.create_charts_tab()
 
-        # Tab 4: Report PDF
+        # Tab 5: Report PDF
         self.tab_pdf = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_pdf, text="📄 Report PDF")
         self.create_pdf_tab()
 
-        # Tab 5: Impostazioni
+        # Tab 6: Impostazioni
         self.tab_settings = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_settings, text="⚙️ Impostazioni")
         self.create_settings_tab()
@@ -241,6 +246,60 @@ class ProducedGUI:
                                  command=self.results_tree.yview)
         scrollbar.pack(side='right', fill='y')
         self.results_tree.config(yscrollcommand=scrollbar.set)
+
+    def create_analysis_tab(self):
+        """Crea il tab per l'analisi giornaliera dettagliata"""
+        # Frame principale
+        main_frame = ttk.Frame(self.tab_analysis, padding="10")
+        main_frame.pack(fill='both', expand=True)
+
+        # Titolo
+        title = ttk.Label(main_frame, text="Analisi Giornaliera Dettagliata",
+                         font=('Arial', 16, 'bold'))
+        title.pack(pady=10)
+
+        # Sottotitolo
+        subtitle = ttk.Label(main_frame,
+                            text="Report completo giorno per giorno: componenti, variazioni e trend",
+                            font=('Arial', 9, 'italic'),
+                            foreground='gray')
+        subtitle.pack(pady=5)
+
+        # Frame controlli
+        controls_frame = ttk.Frame(main_frame)
+        controls_frame.pack(fill='x', pady=5)
+
+        ttk.Button(controls_frame, text="🔄 Aggiorna Analisi",
+                  command=self.update_daily_analysis).pack(side='left', padx=5)
+
+        ttk.Button(controls_frame, text="💾 Esporta Report TXT",
+                  command=self.export_daily_analysis).pack(side='left', padx=5)
+
+        # Area testo con scrollbar
+        text_frame = ttk.LabelFrame(main_frame, text="Report Giornaliero", padding="10")
+        text_frame.pack(fill='both', expand=True, pady=5)
+
+        # Scrollbar verticale
+        scrollbar = ttk.Scrollbar(text_frame)
+        scrollbar.pack(side='right', fill='y')
+
+        # Text widget
+        self.analysis_text = tk.Text(text_frame, wrap='word',
+                                     font=('Courier', 9),
+                                     yscrollcommand=scrollbar.set,
+                                     height=30)
+        self.analysis_text.pack(side='left', fill='both', expand=True)
+        scrollbar.config(command=self.analysis_text.yview)
+
+        # Tag per colori
+        self.analysis_text.tag_configure('header', font=('Courier', 10, 'bold'),
+                                        foreground='#2c3e50')
+        self.analysis_text.tag_configure('date', font=('Courier', 9, 'bold'),
+                                        foreground='#16a085')
+        self.analysis_text.tag_configure('increase', foreground='#27ae60')
+        self.analysis_text.tag_configure('decrease', foreground='#e74c3c')
+        self.analysis_text.tag_configure('neutral', foreground='#95a5a6')
+        self.analysis_text.tag_configure('section', font=('Courier', 9, 'bold'))
 
     def create_charts_tab(self):
         """Crea il tab per i grafici"""
@@ -691,6 +750,15 @@ class ProducedGUI:
             # Aggiorna grafico
             self.update_chart()
 
+            # Aggiorna analisi giornaliera (automatico, silenzioso)
+            if hasattr(self, 'analysis_text'):
+                try:
+                    report_text = self.generate_daily_analysis_report()
+                    self.analysis_text.delete('1.0', tk.END)
+                    self.analysis_text.insert('1.0', report_text)
+                except Exception as e:
+                    print(f"⚠️ Errore aggiornamento analisi: {e}")
+
             self.set_status(f"Calcolo completato: {len(results)} giorni elaborati")
 
             # Messaggio successo con eventuale warning
@@ -779,6 +847,192 @@ class ProducedGUI:
                 f"{row['Stock_Finale']:.2f}",
                 f"{row['Delta_Stock']:.2f}"
             ), tags=tags)
+
+    def update_daily_analysis(self):
+        """Aggiorna l'analisi giornaliera nel tab (chiamata manuale dal pulsante)"""
+        if self.results_df is None or self.df is None:
+            messagebox.showwarning("Attenzione", "Carica prima i dati e calcola Produced")
+            return
+
+        try:
+            # Genera il report
+            report_text = self.generate_daily_analysis_report()
+
+            # Mostra nel text widget
+            self.analysis_text.delete('1.0', tk.END)
+            self.analysis_text.insert('1.0', report_text)
+
+            messagebox.showinfo("Completato", f"Analisi generata per {len(self.results_df)} giorni")
+        except Exception as e:
+            messagebox.showerror("Errore", f"Errore durante la generazione dell'analisi:\n{str(e)}")
+
+    def generate_daily_analysis_report(self):
+        """Genera il testo del report di analisi giornaliera"""
+        lines = []
+        lines.append("="*100)
+        lines.append(" " * 30 + "ANALISI GIORNALIERA DETTAGLIATA - PRODUCED")
+        lines.append("="*100)
+        lines.append("")
+
+        # Per ogni giorno
+        for idx, row in self.results_df.iterrows():
+            date_str = pd.to_datetime(row['Data']).strftime('%d/%m/%Y (%A)')
+
+            lines.append("-" * 100)
+            lines.append(f"📅 {date_str}")
+            lines.append("-" * 100)
+
+            # Produced totale
+            produced = row['Produced']
+            lines.append(f"")
+            lines.append(f"🍺 PRODUCED TOTALE: {produced:,.2f} hl")
+            lines.append(f"")
+
+            # === BREAKDOWN COMPONENTI ===
+            lines.append("┌─ BREAKDOWN COMPONENTI ─────────────────────────────────────────────────────┐")
+            lines.append("│")
+
+            # PACKED
+            packed_ow1 = row.get('Packed_OW1', row.get('Packed OW1', 0))
+            packed_rgb = row.get('Packed_RGB', row.get('Packed RGB', 0))
+            packed_ow2 = row.get('Packed_OW2', row.get('Packed OW2', 0))
+            packed_keg = row.get('Packed_KEG', row.get('Packed KEG', 0))
+            packed_total = row['Packed']
+
+            lines.append(f"│ 📦 PACKED (imbottigliato/confezionato)")
+            lines.append(f"│    OW1:     {packed_ow1:10,.2f} hl")
+            lines.append(f"│    RGB:     {packed_rgb:10,.2f} hl")
+            lines.append(f"│    OW2:     {packed_ow2:10,.2f} hl")
+            lines.append(f"│    KEG:     {packed_keg:10,.2f} hl")
+            lines.append(f"│    ────────────────────────")
+            lines.append(f"│    TOTALE:  {packed_total:10,.2f} hl  ({packed_total/produced*100:5.1f}%)")
+            lines.append(f"│")
+
+            # CISTERNE
+            truck1_hl = row.get('Truck1_hl_std', 0)
+            truck2_hl = row.get('Truck2_hl_std', 0)
+            cisterne_total = row['Cisterne']
+            cisterne_contrib = cisterne_total / 2
+
+            lines.append(f"│ 🚛 CISTERNE / 2  (contributo al Produced)")
+            lines.append(f"│    Truck1:    {truck1_hl:10,.2f} hl std")
+            lines.append(f"│    Truck2:    {truck2_hl:10,.2f} hl std")
+            lines.append(f"│    ────────────────────────")
+            lines.append(f"│    Totale:    {cisterne_total:10,.2f} hl std")
+            lines.append(f"│    /2:        {cisterne_contrib:10,.2f} hl  ({cisterne_contrib/produced*100:5.1f}%)")
+            lines.append(f"│")
+
+            # DELTA STOCK
+            stock_iniz = row['Stock_Iniziale']
+            stock_fin = row['Stock_Finale']
+            delta_stock = row['Delta_Stock']
+            delta_contrib = delta_stock / 2
+
+            stock_trend = "↗️ AUMENTATO" if delta_stock > 0 else ("↘️ DIMINUITO" if delta_stock < 0 else "➡️ INVARIATO")
+
+            lines.append(f"│ 📊 DELTA STOCK / 2  (variazione magazzino)")
+            lines.append(f"│    Stock Iniziale:  {stock_iniz:10,.2f} hl std")
+            lines.append(f"│    Stock Finale:    {stock_fin:10,.2f} hl std")
+            lines.append(f"│    ────────────────────────")
+            lines.append(f"│    Delta:           {delta_stock:10,.2f} hl std  {stock_trend}")
+            lines.append(f"│    /2:              {delta_contrib:10,.2f} hl  ({abs(delta_contrib)/produced*100:5.1f}%)")
+            lines.append(f"│")
+            lines.append(f"└────────────────────────────────────────────────────────────────────────────┘")
+            lines.append(f"")
+
+            # === VARIAZIONI RISPETTO AL GIORNO PRECEDENTE ===
+            if idx > 0:
+                prev_row = self.results_df.iloc[idx - 1]
+                prev_produced = prev_row['Produced']
+                var_produced = produced - prev_produced
+                var_perc = (var_produced / prev_produced * 100) if prev_produced != 0 else 0
+
+                var_trend = "📈 AUMENTO" if var_produced > 0 else ("📉 DIMINUZIONE" if var_produced < 0 else "➡️ STABILE")
+
+                lines.append("┌─ VARIAZIONE vs GIORNO PRECEDENTE ──────────────────────────────────────────┐")
+                lines.append("│")
+                lines.append(f"│ {var_trend}")
+                lines.append(f"│")
+                lines.append(f"│ Produced oggi:      {produced:10,.2f} hl")
+                lines.append(f"│ Produced ieri:      {prev_produced:10,.2f} hl")
+                lines.append(f"│ Variazione:         {var_produced:+10,.2f} hl  ({var_perc:+.1f}%)")
+                lines.append(f"│")
+
+                # Variazioni componenti
+                var_packed = row['Packed'] - prev_row['Packed']
+                var_cisterne = row['Cisterne'] - prev_row['Cisterne']
+                var_delta_stock = row['Delta_Stock'] - prev_row['Delta_Stock']
+
+                lines.append(f"│ Dettaglio variazioni:")
+                lines.append(f"│   Packed:           {var_packed:+10,.2f} hl")
+                lines.append(f"│   Cisterne:         {var_cisterne:+10,.2f} hl")
+                lines.append(f"│   Delta Stock:      {var_delta_stock:+10,.2f} hl")
+                lines.append(f"│")
+                lines.append(f"└────────────────────────────────────────────────────────────────────────────┘")
+                lines.append(f"")
+
+            lines.append("")
+
+        # RIEPILOGO FINALE
+        lines.append("="*100)
+        lines.append(" " * 35 + "RIEPILOGO PERIODO")
+        lines.append("="*100)
+        lines.append(f"")
+        lines.append(f"Giorni analizzati:         {len(self.results_df)}")
+        lines.append(f"Produced TOTALE:           {self.results_df['Produced'].sum():,.2f} hl")
+        lines.append(f"Produced MEDIO:            {self.results_df['Produced'].mean():,.2f} hl/giorno")
+        lines.append(f"Produced MIN:              {self.results_df['Produced'].min():,.2f} hl  ({pd.to_datetime(self.results_df.loc[self.results_df['Produced'].idxmin(), 'Data']).strftime('%d/%m/%Y')})")
+        lines.append(f"Produced MAX:              {self.results_df['Produced'].max():,.2f} hl  ({pd.to_datetime(self.results_df.loc[self.results_df['Produced'].idxmax(), 'Data']).strftime('%d/%m/%Y')})")
+        lines.append(f"")
+        lines.append(f"Packed TOTALE:             {self.results_df['Packed'].sum():,.2f} hl")
+        lines.append(f"Cisterne TOTALE:           {self.results_df['Cisterne'].sum():,.2f} hl")
+        lines.append(f"Stock Iniziale (1° gg):    {self.results_df.iloc[0]['Stock_Iniziale']:,.2f} hl")
+        lines.append(f"Stock Finale (ultimo gg):  {self.results_df.iloc[-1]['Stock_Finale']:,.2f} hl")
+        lines.append(f"")
+        lines.append("="*100)
+
+        return "\n".join(lines)
+
+    def export_daily_analysis(self):
+        """Esporta l'analisi giornaliera in un file TXT"""
+        if self.results_df is None:
+            messagebox.showwarning("Attenzione", "Carica prima i dati e calcola Produced")
+            return
+
+        # Genera report
+        report_text = self.generate_daily_analysis_report()
+
+        # Dialog salvataggio
+        from tkinter import filedialog
+        import os
+
+        # Nome file suggerito
+        today = datetime.now().strftime('%Y-%m-%d')
+        default_filename = f"analisi_giornaliera_{today}.txt"
+
+        # Determina cartella report
+        report_dir = os.path.join(os.getcwd(), 'report')
+        if not os.path.exists(report_dir):
+            os.makedirs(report_dir)
+
+        filepath = filedialog.asksaveasfilename(
+            title="Salva Analisi Giornaliera",
+            initialdir=report_dir,
+            initialfile=default_filename,
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+
+        if filepath:
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(report_text)
+
+                messagebox.showinfo("Completato",
+                                  f"Analisi esportata con successo!\n\n{filepath}")
+            except Exception as e:
+                messagebox.showerror("Errore",
+                                   f"Errore durante l'esportazione:\n{str(e)}")
 
     def clear_data(self):
         """Pulisce i dati caricati"""
