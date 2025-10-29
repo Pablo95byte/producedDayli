@@ -319,6 +319,7 @@ class ProducedGUI:
             ('Produced Giornaliero', 'produced_daily'),
             ('Produced Settimanale', 'produced_weekly'),
             ('Componenti Stacked', 'components_stacked'),
+            ('Dettaglio Packed', 'packed_detail'),
             ('Evoluzione Stock', 'stock_evolution')
         ]
 
@@ -1112,6 +1113,8 @@ class ProducedGUI:
                 self._plot_produced_weekly()
             elif chart_type == 'components_stacked':
                 self._plot_components_stacked()
+            elif chart_type == 'packed_detail':
+                self._plot_packed_detail()
             elif chart_type == 'stock_evolution':
                 self._plot_stock_evolution()
 
@@ -1207,7 +1210,7 @@ class ProducedGUI:
         self.figure.tight_layout()
 
     def _plot_components_stacked(self):
-        """Grafico componenti stacked con tooltip"""
+        """Grafico componenti stacked con tooltip dettagliati"""
         ax = self.figure.add_subplot(111)
 
         # Converti date
@@ -1233,9 +1236,8 @@ class ProducedGUI:
         ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//15)))
         self.figure.autofmt_xdate(rotation=45)
 
-        # Aggiungi tooltip per il totale (Produced)
-        totals = self.results_df['Produced'].values
-        self._add_bar_tooltips(ax, bars1, dates, totals, label='Produced Totale')
+        # Aggiungi tooltip dettagliato con breakdown componenti
+        self._add_components_tooltips(ax, bars1, dates)
 
         self.figure.tight_layout()
 
@@ -1432,6 +1434,142 @@ class ProducedGUI:
                         text += f"Totale: {week['Total']:.2f} hl\n"
                         text += f"Media: {week['Mean']:.2f} hl/giorno\n"
                         text += f"Giorni: {int(week['Days'])}"
+
+                        annot.set_text(text)
+                        annot.set_visible(True)
+                        self.canvas.draw_idle()
+                        return
+
+                if annot.get_visible():
+                    annot.set_visible(False)
+                    self.canvas.draw_idle()
+
+        self.canvas.mpl_connect("motion_notify_event", hover)
+
+    def _add_components_tooltips(self, ax, bars, dates):
+        """Tooltip dettagliato con breakdown di tutte le componenti"""
+        annot = ax.annotate("", xy=(0, 0), xytext=(10, 10),
+                           textcoords="offset points",
+                           bbox=dict(boxstyle="round,pad=0.5", fc="lightblue", alpha=0.95),
+                           arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+                           fontsize=8, fontweight='bold')
+        annot.set_visible(False)
+
+        def hover(event):
+            if event.inaxes == ax:
+                for i, bar in enumerate(bars):
+                    if bar.contains(event)[0]:
+                        x = bar.get_x() + bar.get_width() / 2
+                        y = self.results_df.iloc[i]['Produced']  # Top della barra totale
+                        annot.xy = (x, y)
+
+                        # Dati componenti
+                        row = self.results_df.iloc[i]
+                        date_str = pd.to_datetime(row['Data']).strftime('%d-%m-%Y')
+
+                        packed = row['Packed']
+                        cisterne = row['Cisterne'] / 2
+                        delta_stock = row['Delta_Stock'] / 2
+                        produced = row['Produced']
+
+                        # Helper per percentuali
+                        def perc(val):
+                            return (val / produced * 100) if produced != 0 else 0.0
+
+                        text = f"{date_str}\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"PRODUCED: {produced:.2f} hl\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"Packed:       {packed:8.2f} hl ({perc(packed):5.1f}%)\n"
+                        text += f"Cisterne/2:   {cisterne:8.2f} hl ({perc(cisterne):5.1f}%)\n"
+                        text += f"ΔStock/2:     {delta_stock:8.2f} hl ({perc(delta_stock):5.1f}%)"
+
+                        annot.set_text(text)
+                        annot.set_visible(True)
+                        self.canvas.draw_idle()
+                        return
+
+                if annot.get_visible():
+                    annot.set_visible(False)
+                    self.canvas.draw_idle()
+
+        self.canvas.mpl_connect("motion_notify_event", hover)
+
+    def _plot_packed_detail(self):
+        """Grafico dettagliato componenti Packed (OW1, RGB, OW2, KEG)"""
+        ax = self.figure.add_subplot(111)
+
+        # Converti date
+        dates = pd.to_datetime(self.results_df['Data'])
+
+        # Estrai componenti Packed (usa get per gestire nomi diversi)
+        packed_ow1 = self.results_df.get('Packed_OW1', self.results_df.get('Packed OW1', 0))
+        packed_rgb = self.results_df.get('Packed_RGB', self.results_df.get('Packed RGB', 0))
+        packed_ow2 = self.results_df.get('Packed_OW2', self.results_df.get('Packed OW2', 0))
+        packed_keg = self.results_df.get('Packed_KEG', self.results_df.get('Packed KEG', 0))
+
+        # Grafico stacked
+        bars1 = ax.bar(dates, packed_ow1, label='OW1', alpha=0.9, color='#FF6B6B')
+        bars2 = ax.bar(dates, packed_rgb, bottom=packed_ow1,
+                      label='RGB', alpha=0.9, color='#4ECDC4')
+        bars3 = ax.bar(dates, packed_ow2, bottom=packed_ow1 + packed_rgb,
+                      label='OW2', alpha=0.9, color='#45B7D1')
+        bars4 = ax.bar(dates, packed_keg,
+                      bottom=packed_ow1 + packed_rgb + packed_ow2,
+                      label='KEG', alpha=0.9, color='#FFA07A')
+
+        ax.set_xlabel('Data', fontweight='bold', fontsize=11)
+        ax.set_ylabel('Packed (hl)', fontweight='bold', fontsize=11)
+        ax.set_title('Dettaglio Packed per Tipologia - Hover per valori', fontweight='bold', fontsize=13, pad=15)
+        ax.legend(loc='upper left', fontsize=10)
+        ax.grid(True, alpha=0.3, axis='y')
+
+        # Formattazione date
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//15)))
+        self.figure.autofmt_xdate(rotation=45)
+
+        # Tooltip dettagliato
+        self._add_packed_detail_tooltips(ax, bars1, dates, packed_ow1, packed_rgb, packed_ow2, packed_keg)
+
+        self.figure.tight_layout()
+
+    def _add_packed_detail_tooltips(self, ax, bars, dates, ow1, rgb, ow2, keg):
+        """Tooltip per grafico dettaglio Packed"""
+        annot = ax.annotate("", xy=(0, 0), xytext=(10, 10),
+                           textcoords="offset points",
+                           bbox=dict(boxstyle="round,pad=0.5", fc="lightyellow", alpha=0.95),
+                           arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+                           fontsize=8, fontweight='bold')
+        annot.set_visible(False)
+
+        def hover(event):
+            if event.inaxes == ax:
+                for i, bar in enumerate(bars):
+                    if bar.contains(event)[0]:
+                        x = bar.get_x() + bar.get_width() / 2
+                        y = ow1.iloc[i] + rgb.iloc[i] + ow2.iloc[i] + keg.iloc[i]
+                        annot.xy = (x, y)
+
+                        date_str = pd.to_datetime(dates.iloc[i]).strftime('%d-%m-%Y')
+
+                        v_ow1 = ow1.iloc[i]
+                        v_rgb = rgb.iloc[i]
+                        v_ow2 = ow2.iloc[i]
+                        v_keg = keg.iloc[i]
+                        total = v_ow1 + v_rgb + v_ow2 + v_keg
+
+                        def perc(val):
+                            return (val / total * 100) if total != 0 else 0.0
+
+                        text = f"{date_str}\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"PACKED TOT: {total:.2f} hl\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"OW1:  {v_ow1:8.2f} hl ({perc(v_ow1):5.1f}%)\n"
+                        text += f"RGB:  {v_rgb:8.2f} hl ({perc(v_rgb):5.1f}%)\n"
+                        text += f"OW2:  {v_ow2:8.2f} hl ({perc(v_ow2):5.1f}%)\n"
+                        text += f"KEG:  {v_keg:8.2f} hl ({perc(v_keg):5.1f}%)"
 
                         annot.set_text(text)
                         annot.set_visible(True)
