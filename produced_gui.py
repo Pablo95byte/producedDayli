@@ -32,8 +32,11 @@ class ProducedGUI:
     def __init__(self, root):
         """Inizializza l'interfaccia grafica"""
         self.root = root
-        self.root.title("Produced Calculator - Dashboard")
-        self.root.geometry("1200x800")
+        self.root.title("🍺 Produced Calculator - Dashboard Heineken")
+        self.root.geometry("1400x900")
+
+        # Configura stile moderno
+        self.setup_modern_style()
 
         # Variabili di stato
         self.df = None
@@ -49,6 +52,88 @@ class ProducedGUI:
         self.create_menu_bar()
         self.create_main_interface()
         self.create_status_bar()
+
+    def setup_modern_style(self):
+        """Configura uno stile moderno e professionale per la GUI"""
+        style = ttk.Style()
+
+        # Tema base
+        try:
+            style.theme_use('clam')  # Tema moderno multi-piattaforma
+        except:
+            pass  # Se clam non è disponibile, usa il tema di default
+
+        # Colori Heineken professionali
+        heineken_green = '#00A74A'      # Verde Heineken principale
+        dark_green = '#008037'          # Verde scuro
+        light_green = '#E8F5E9'         # Verde chiaro per sfondi
+        gray_bg = '#F5F5F5'             # Grigio chiaro per background
+        dark_gray = '#424242'           # Grigio scuro per testo
+        white = '#FFFFFF'
+
+        # Configura colori di sfondo
+        self.root.configure(bg=gray_bg)
+
+        # Stile per Notebook (tabs)
+        style.configure('TNotebook', background=gray_bg, borderwidth=0)
+        style.configure('TNotebook.Tab',
+                       padding=[20, 10],
+                       font=('Segoe UI', 11, 'bold'),
+                       background=gray_bg,
+                       foreground=dark_gray)
+        style.map('TNotebook.Tab',
+                 background=[('selected', heineken_green), ('active', dark_green)],
+                 foreground=[('selected', white), ('active', white)])
+
+        # Stile per Frame
+        style.configure('TFrame', background=white)
+        style.configure('Card.TFrame',
+                       background=white,
+                       relief='flat',
+                       borderwidth=1)
+
+        # Stile per Label
+        style.configure('TLabel',
+                       background=white,
+                       foreground=dark_gray,
+                       font=('Segoe UI', 10))
+        style.configure('Title.TLabel',
+                       font=('Segoe UI', 16, 'bold'),
+                       foreground=heineken_green,
+                       background=white)
+        style.configure('Subtitle.TLabel',
+                       font=('Segoe UI', 11),
+                       foreground=dark_gray,
+                       background=white)
+
+        # Stile per Button
+        style.configure('TButton',
+                       font=('Segoe UI', 10, 'bold'),
+                       borderwidth=0,
+                       focuscolor='none',
+                       padding=[15, 8])
+        style.map('TButton',
+                 background=[('active', dark_green), ('!active', heineken_green)],
+                 foreground=[('active', white), ('!active', white)])
+
+        # Stile per Button primario (azioni principali)
+        style.configure('Primary.TButton',
+                       font=('Segoe UI', 11, 'bold'),
+                       borderwidth=0,
+                       padding=[20, 10])
+        style.map('Primary.TButton',
+                 background=[('active', dark_green), ('!active', heineken_green)],
+                 foreground=[('active', white), ('!active', white)])
+
+        # Stile per LabelFrame
+        style.configure('TLabelframe',
+                       background=white,
+                       borderwidth=2,
+                       relief='solid')
+        style.configure('TLabelframe.Label',
+                       font=('Segoe UI', 11, 'bold'),
+                       foreground=heineken_green,
+                       background=white)
 
     def create_menu_bar(self):
         """Crea la barra dei menu"""
@@ -126,15 +211,14 @@ class ProducedGUI:
         main_frame.pack(fill='both', expand=True)
 
         # Titolo
-        title = ttk.Label(main_frame, text="Caricamento Dati CSV (Triple Mode)",
-                         font=('Arial', 16, 'bold'))
+        title = ttk.Label(main_frame, text="📊 Caricamento Dati CSV (Triple Mode)",
+                         style='Title.TLabel')
         title.pack(pady=10)
 
         # Sottotitolo esplicativo
         subtitle = ttk.Label(main_frame,
                             text="Carica 3 file: Stock (giornaliero) + Packed (orario) + Cisterne (orario)",
-                            font=('Arial', 9, 'italic'),
-                            foreground='gray')
+                            style='Subtitle.TLabel')
         subtitle.pack(pady=5)
 
         # Frame selezione file 1 - STOCK ONLY
@@ -193,9 +277,9 @@ class ProducedGUI:
         action_frame = ttk.Frame(main_frame)
         action_frame.pack(fill='x', pady=10)
 
-        load_btn = ttk.Button(action_frame, text="Carica e Analizza",
+        load_btn = ttk.Button(action_frame, text="✨ Carica e Analizza",
                              command=self.load_and_analyze,
-                             style='Accent.TButton')
+                             style='Primary.TButton')
         load_btn.pack(side='left', padx=5)
 
         clear_btn = ttk.Button(action_frame, text="Pulisci",
@@ -391,9 +475,9 @@ class ProducedGUI:
                        variable=self.pdf_include_weekly).pack(anchor='w', pady=2)
 
         # Bottone genera
-        generate_btn = ttk.Button(main_frame, text="Genera Report PDF",
+        generate_btn = ttk.Button(main_frame, text="📄 Genera Report PDF",
                                  command=self.generate_pdf,
-                                 style='Accent.TButton')
+                                 style='Primary.TButton')
         generate_btn.pack(pady=20)
 
         # Area log
@@ -873,8 +957,17 @@ class ProducedGUI:
                 results.append({
                     'Data': row['Time'],
                     'Produced': produced,
+                    # Packed breakdown
+                    'Packed OW1': packed_ow1,
+                    'Packed RGB': packed_rgb,
+                    'Packed OW2': packed_ow2,
+                    'Packed KEG': packed_keg,
                     'Packed': packed_total,
+                    # Cisterne breakdown
+                    'Truck1 hl_std': truck1_hl_std,
+                    'Truck2 hl_std': truck2_hl_std,
                     'Cisterne': cisterne_total,
+                    # Stock
                     'Stock_Iniziale': stock_iniziale,
                     'Stock_Finale': stock_finale,
                     'Delta_Stock': delta_stock
@@ -1039,33 +1132,33 @@ class ProducedGUI:
             lines.append("│")
 
             # PACKED
-            packed_ow1 = row.get('Packed_OW1', row.get('Packed OW1', 0))
-            packed_rgb = row.get('Packed_RGB', row.get('Packed RGB', 0))
-            packed_ow2 = row.get('Packed_OW2', row.get('Packed OW2', 0))
-            packed_keg = row.get('Packed_KEG', row.get('Packed KEG', 0))
+            packed_ow1 = row.get('Packed OW1', 0)
+            packed_rgb = row.get('Packed RGB', 0)
+            packed_ow2 = row.get('Packed OW2', 0)
+            packed_keg = row.get('Packed KEG', 0)
             packed_total = row['Packed']
 
             lines.append(f"│ 📦 PACKED (imbottigliato/confezionato)")
-            lines.append(f"│    OW1:     {packed_ow1:10,.2f} hl")
-            lines.append(f"│    RGB:     {packed_rgb:10,.2f} hl")
-            lines.append(f"│    OW2:     {packed_ow2:10,.2f} hl")
-            lines.append(f"│    KEG:     {packed_keg:10,.2f} hl")
-            lines.append(f"│    ────────────────────────")
-            lines.append(f"│    TOTALE:  {packed_total:10,.2f} hl  ({calc_perc(packed_total, produced):5.1f}%)")
+            lines.append(f"│    OW1:     {packed_ow1:10,.2f} hl  ({calc_perc(packed_ow1, packed_total):5.1f}%)")
+            lines.append(f"│    RGB:     {packed_rgb:10,.2f} hl  ({calc_perc(packed_rgb, packed_total):5.1f}%)")
+            lines.append(f"│    OW2:     {packed_ow2:10,.2f} hl  ({calc_perc(packed_ow2, packed_total):5.1f}%)")
+            lines.append(f"│    KEG:     {packed_keg:10,.2f} hl  ({calc_perc(packed_keg, packed_total):5.1f}%)")
+            lines.append(f"│    ────────────────────────────────────")
+            lines.append(f"│    TOTALE:  {packed_total:10,.2f} hl  ({calc_perc(packed_total, produced):5.1f}% sul Produced)")
             lines.append(f"│")
 
             # CISTERNE
-            truck1_hl = row.get('Truck1_hl_std', 0)
-            truck2_hl = row.get('Truck2_hl_std', 0)
+            truck1_hl = row.get('Truck1 hl_std', 0)
+            truck2_hl = row.get('Truck2 hl_std', 0)
             cisterne_total = row['Cisterne']
             cisterne_contrib = cisterne_total / 2
 
             lines.append(f"│ 🚛 CISTERNE / 2  (contributo al Produced)")
-            lines.append(f"│    Truck1:    {truck1_hl:10,.2f} hl std")
-            lines.append(f"│    Truck2:    {truck2_hl:10,.2f} hl std")
-            lines.append(f"│    ────────────────────────")
+            lines.append(f"│    Truck1:    {truck1_hl:10,.2f} hl std  ({calc_perc(truck1_hl, cisterne_total):5.1f}%)")
+            lines.append(f"│    Truck2:    {truck2_hl:10,.2f} hl std  ({calc_perc(truck2_hl, cisterne_total):5.1f}%)")
+            lines.append(f"│    ────────────────────────────────────")
             lines.append(f"│    Totale:    {cisterne_total:10,.2f} hl std")
-            lines.append(f"│    /2:        {cisterne_contrib:10,.2f} hl  ({calc_perc(cisterne_contrib, produced):5.1f}%)")
+            lines.append(f"│    /2:        {cisterne_contrib:10,.2f} hl  ({calc_perc(cisterne_contrib, produced):5.1f}% sul Produced)")
             lines.append(f"│")
 
             # DELTA STOCK
@@ -1648,11 +1741,11 @@ class ProducedGUI:
         # Converti date
         dates = pd.to_datetime(self.results_df['Data'])
 
-        # Estrai componenti Packed (usa get per gestire nomi diversi)
-        packed_ow1 = self.results_df.get('Packed_OW1', self.results_df.get('Packed OW1', 0))
-        packed_rgb = self.results_df.get('Packed_RGB', self.results_df.get('Packed RGB', 0))
-        packed_ow2 = self.results_df.get('Packed_OW2', self.results_df.get('Packed OW2', 0))
-        packed_keg = self.results_df.get('Packed_KEG', self.results_df.get('Packed KEG', 0))
+        # Estrai componenti Packed
+        packed_ow1 = self.results_df['Packed OW1']
+        packed_rgb = self.results_df['Packed RGB']
+        packed_ow2 = self.results_df['Packed OW2']
+        packed_keg = self.results_df['Packed KEG']
 
         # Grafico stacked
         bars1 = ax.bar(dates, packed_ow1, label='OW1', alpha=0.9, color='#FF6B6B')
