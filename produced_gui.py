@@ -418,7 +418,9 @@ class ProducedGUI:
             ('Produced Giornaliero', 'produced_daily'),
             ('Produced Settimanale', 'produced_weekly'),
             ('Componenti Stacked', 'components_stacked'),
+            ('Dettaglio Produced', 'produced_detail'),
             ('Dettaglio Packed', 'packed_detail'),
+            ('Dettaglio Truck', 'truck_detail'),
             ('Evoluzione Stock', 'stock_evolution')
         ]
 
@@ -1353,8 +1355,12 @@ class ProducedGUI:
                 self._plot_produced_weekly()
             elif chart_type == 'components_stacked':
                 self._plot_components_stacked()
+            elif chart_type == 'produced_detail':
+                self._plot_produced_detail()
             elif chart_type == 'packed_detail':
                 self._plot_packed_detail()
+            elif chart_type == 'truck_detail':
+                self._plot_truck_detail()
             elif chart_type == 'stock_evolution':
                 self._plot_stock_evolution()
 
@@ -1809,6 +1815,214 @@ class ProducedGUI:
                         text += f"RGB:  {v_rgb:8.2f} hl ({perc(v_rgb):5.1f}%)\n"
                         text += f"OW2:  {v_ow2:8.2f} hl ({perc(v_ow2):5.1f}%)\n"
                         text += f"KEG:  {v_keg:8.2f} hl ({perc(v_keg):5.1f}%)"
+
+                        annot.set_text(text)
+                        annot.set_visible(True)
+                        self.canvas.draw_idle()
+                        return
+
+                if annot.get_visible():
+                    annot.set_visible(False)
+                    self.canvas.draw_idle()
+
+        self.canvas.mpl_connect("motion_notify_event", hover)
+
+    def _plot_produced_detail(self):
+        """Grafico dettagliato breakdown Produced (Packed + Cisterne/2 + ΔStock/2)"""
+        ax = self.figure.add_subplot(111)
+
+        # Converti date
+        dates = pd.to_datetime(self.results_df['Data'])
+
+        # Estrai componenti
+        packed = self.results_df['Packed']
+        cisterne_half = self.results_df['Cisterne'] / 2
+        delta_stock_half = self.results_df['Delta_Stock'] / 2
+
+        # Per gestire ΔStock negativi, separiamo i positivi dai negativi
+        delta_positive = delta_stock_half.clip(lower=0)
+        delta_negative = delta_stock_half.clip(upper=0)
+
+        # Grafico stacked per componenti positivi
+        bars1 = ax.bar(dates, packed, label='Packed', alpha=0.9, color='#4A90E2')
+        bars2 = ax.bar(dates, cisterne_half, bottom=packed,
+                      label='Cisterne/2', alpha=0.9, color='#F5A623')
+        bars3 = ax.bar(dates, delta_positive, bottom=packed + cisterne_half,
+                      label='ΔStock/2 (positivo)', alpha=0.9, color='#7ED321')
+
+        # Barre separate per ΔStock negativi (partono da Packed + Cisterne/2)
+        bars4 = ax.bar(dates, delta_negative, bottom=packed + cisterne_half,
+                      label='ΔStock/2 (negativo)', alpha=0.9, color='#D0021B')
+
+        ax.set_xlabel('Data', fontweight='bold', fontsize=11)
+        ax.set_ylabel('Produced (hl)', fontweight='bold', fontsize=11)
+        ax.set_title('Breakdown Produced - Hover per dettagli', fontweight='bold', fontsize=13, pad=15)
+        ax.legend(loc='upper left', fontsize=10)
+        ax.grid(True, alpha=0.3, axis='y')
+
+        # Formattazione date
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//15)))
+        self.figure.autofmt_xdate(rotation=45)
+
+        # Tooltip dettagliato
+        self._add_produced_detail_tooltips(ax, bars1, dates, packed, cisterne_half, delta_stock_half)
+
+        self.figure.tight_layout()
+
+    def _add_produced_detail_tooltips(self, ax, bars, dates, packed, cisterne_half, delta_stock_half):
+        """Tooltip per grafico breakdown Produced"""
+        annot = ax.annotate("", xy=(0, 0), xytext=(10, 10),
+                           textcoords="offset points",
+                           bbox=dict(boxstyle="round,pad=0.5", fc="lightyellow", alpha=0.95),
+                           arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+                           fontsize=9, fontweight='bold')
+        annot.set_visible(False)
+
+        def hover(event):
+            if event.inaxes == ax:
+                for i, bar in enumerate(bars):
+                    if bar.contains(event)[0]:
+                        x = bar.get_x() + bar.get_width() / 2
+
+                        date_str = pd.to_datetime(dates.iloc[i]).strftime('%d-%m-%Y')
+
+                        v_packed = packed.iloc[i]
+                        v_cisterne = cisterne_half.iloc[i]
+                        v_delta = delta_stock_half.iloc[i]
+                        produced = v_packed + v_cisterne + v_delta
+                        y = produced
+
+                        annot.xy = (x, y)
+
+                        def perc(val):
+                            return (val / produced * 100) if produced != 0 else 0.0
+
+                        text = f"{date_str}\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"PRODUCED:      {produced:8.2f} hl\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"Packed:        {v_packed:8.2f} hl ({perc(v_packed):5.1f}%)\n"
+                        text += f"Cisterne/2:    {v_cisterne:8.2f} hl ({perc(v_cisterne):5.1f}%)\n"
+                        text += f"ΔStock/2:      {v_delta:+8.2f} hl ({perc(abs(v_delta)):5.1f}%)"
+
+                        annot.set_text(text)
+                        annot.set_visible(True)
+                        self.canvas.draw_idle()
+                        return
+
+                if annot.get_visible():
+                    annot.set_visible(False)
+                    self.canvas.draw_idle()
+
+        self.canvas.mpl_connect("motion_notify_event", hover)
+
+    def _plot_truck_detail(self):
+        """Grafico dettagliato confronto Truck1 vs Truck2"""
+        ax = self.figure.add_subplot(111)
+
+        # Converti date
+        dates = pd.to_datetime(self.results_df['Data'])
+
+        # Estrai valori Truck
+        truck1 = self.results_df['Truck1 hl_std']
+        truck2 = self.results_df['Truck2 hl_std']
+
+        # Larghezza barre
+        width = 0.35
+        x = range(len(dates))
+
+        # Barre affiancate
+        bars1 = ax.bar([i - width/2 for i in x], truck1, width,
+                       label='Truck 1', alpha=0.9, color='#3498DB')
+        bars2 = ax.bar([i + width/2 for i in x], truck2, width,
+                       label='Truck 2', alpha=0.9, color='#2ECC71')
+
+        ax.set_xlabel('Data', fontweight='bold', fontsize=11)
+        ax.set_ylabel('hl standard', fontweight='bold', fontsize=11)
+        ax.set_title('Dettaglio Cisterne: Truck1 vs Truck2 - Hover per valori', fontweight='bold', fontsize=13, pad=15)
+        ax.legend(loc='upper left', fontsize=10)
+        ax.grid(True, alpha=0.3, axis='y')
+
+        # Formattazione date
+        ax.set_xticks(x)
+        date_labels = [d.strftime('%d-%m') for d in dates]
+        ax.set_xticklabels(date_labels, rotation=45, ha='right')
+
+        # Salta etichette se troppe
+        if len(dates) > 15:
+            for i, label in enumerate(ax.xaxis.get_ticklabels()):
+                if i % (len(dates) // 15 + 1) != 0:
+                    label.set_visible(False)
+
+        # Tooltip dettagliato
+        self._add_truck_detail_tooltips(ax, bars1, bars2, dates, truck1, truck2)
+
+        self.figure.tight_layout()
+
+    def _add_truck_detail_tooltips(self, ax, bars1, bars2, dates, truck1, truck2):
+        """Tooltip per grafico Truck detail"""
+        annot = ax.annotate("", xy=(0, 0), xytext=(10, 10),
+                           textcoords="offset points",
+                           bbox=dict(boxstyle="round,pad=0.5", fc="lightyellow", alpha=0.95),
+                           arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+                           fontsize=9, fontweight='bold')
+        annot.set_visible(False)
+
+        def hover(event):
+            if event.inaxes == ax:
+                # Controlla Truck1
+                for i, bar in enumerate(bars1):
+                    if bar.contains(event)[0]:
+                        x = bar.get_x() + bar.get_width() / 2
+                        y = truck1.iloc[i]
+                        annot.xy = (x, y)
+
+                        date_str = pd.to_datetime(dates.iloc[i]).strftime('%d-%m-%Y')
+                        v_t1 = truck1.iloc[i]
+                        v_t2 = truck2.iloc[i]
+                        total = v_t1 + v_t2
+
+                        def perc(val):
+                            return (val / total * 100) if total != 0 else 0.0
+
+                        text = f"{date_str}\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"🚛 TRUCK 1\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"{v_t1:8.2f} hl std\n"
+                        text += f"({perc(v_t1):5.1f}% del totale)\n"
+                        text += f"\n"
+                        text += f"Totale Cisterne: {total:8.2f} hl"
+
+                        annot.set_text(text)
+                        annot.set_visible(True)
+                        self.canvas.draw_idle()
+                        return
+
+                # Controlla Truck2
+                for i, bar in enumerate(bars2):
+                    if bar.contains(event)[0]:
+                        x = bar.get_x() + bar.get_width() / 2
+                        y = truck2.iloc[i]
+                        annot.xy = (x, y)
+
+                        date_str = pd.to_datetime(dates.iloc[i]).strftime('%d-%m-%Y')
+                        v_t1 = truck1.iloc[i]
+                        v_t2 = truck2.iloc[i]
+                        total = v_t1 + v_t2
+
+                        def perc(val):
+                            return (val / total * 100) if total != 0 else 0.0
+
+                        text = f"{date_str}\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"🚛 TRUCK 2\n"
+                        text += f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        text += f"{v_t2:8.2f} hl std\n"
+                        text += f"({perc(v_t2):5.1f}% del totale)\n"
+                        text += f"\n"
+                        text += f"Totale Cisterne: {total:8.2f} hl"
 
                         annot.set_text(text)
                         annot.set_visible(True)
