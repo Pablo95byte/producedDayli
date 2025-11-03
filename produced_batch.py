@@ -217,8 +217,14 @@ def aggregate_cisterne_hourly(df_cisterne):
             f"Trovate: {', '.join(df_cisterne.columns)}"
         )
 
-    # Aggrega per giorno (MEDIA di tutte le ore, non somma!)
-    agg_dict = {col: 'mean' for col in cisterne_cols_map.keys()}
+    # Aggrega per giorno: SOMMA per Level (volume in hl), MEDIA per Plato (concentrazione)
+    # I dati truck CSV sono in hl e devono essere sommati per ottenere il totale giornaliero
+    agg_dict = {}
+    for col in cisterne_cols_map.keys():
+        if 'Level' in col:
+            agg_dict[col] = 'sum'  # SOMMA dei volumi
+        else:
+            agg_dict[col] = 'mean'  # MEDIA del Plato
     cisterne_daily = df_cisterne.groupby('Date').agg(agg_dict).reset_index()
 
     # Rinomina colonne per compatibilità
