@@ -722,8 +722,14 @@ class ProducedGUI:
                 f"Verifica il formato del CSV Cisterne."
             )
 
-        # Aggrega per giorno (media per Level e Plato)
-        agg_dict = {col: 'mean' for col in cisterne_cols_map.keys()}
+        # Aggrega per giorno: SOMMA per Level (volume in hl), MEDIA per Plato (concentrazione)
+        # I dati truck CSV sono in hl e devono essere sommati per ottenere il totale giornaliero
+        agg_dict = {}
+        for col in cisterne_cols_map.keys():
+            if 'Level' in col:
+                agg_dict[col] = 'sum'  # SOMMA dei volumi
+            else:
+                agg_dict[col] = 'mean'  # MEDIA del Plato
         cisterne_daily = self.df_cisterne.groupby('Date').agg(agg_dict).reset_index()
 
         # Rinomina colonne per compatibilità
