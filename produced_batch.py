@@ -265,6 +265,26 @@ def process_all_days(csv_stock_path, csv_packed_path, csv_cisterne_path):
     print("Caricamento CSV Stock (solo tanks BBT/FST/RBT)...")
     df_stock = pd.read_csv(csv_stock_path)
 
+    # Rileva e normalizza il nome della colonna temporale
+    time_col = None
+    possible_time_cols = ['Time', 'Timestamp', 'DateTime', 'Date', 'time', 'timestamp', 'datetime', 'date']
+    for col in possible_time_cols:
+        if col in df_stock.columns:
+            time_col = col
+            break
+
+    if time_col is None:
+        raise ValueError(
+            f"❌ Colonna temporale non trovata nel CSV Stock!\n"
+            f"Colonne richieste: Time, Timestamp, DateTime, o Date\n"
+            f"Colonne trovate: {', '.join(df_stock.columns)}"
+        )
+
+    # Normalizza a 'Time' per compatibilità con il resto del codice
+    if time_col != 'Time':
+        print(f"  ℹ️  Colonna temporale rilevata: '{time_col}' → rinominata in 'Time'")
+        df_stock = df_stock.rename(columns={time_col: 'Time'})
+
     print("Caricamento CSV Packed (orario)...")
     df_packed = pd.read_csv(csv_packed_path)
     print(f"  CSV Packed: {len(df_packed)} righe orarie")

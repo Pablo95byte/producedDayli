@@ -613,6 +613,26 @@ class ProducedGUI:
             # === CARICA CSV 1: STOCK TANKS (giornaliero) ===
             self.df = pd.read_csv(self.csv_path)
 
+            # Rileva e normalizza il nome della colonna temporale
+            time_col = None
+            possible_time_cols = ['Time', 'Timestamp', 'DateTime', 'Date', 'time', 'timestamp', 'datetime', 'date']
+            for col in possible_time_cols:
+                if col in self.df.columns:
+                    time_col = col
+                    break
+
+            if time_col is None:
+                raise ValueError(
+                    f"❌ Colonna temporale non trovata nel CSV Stock!\n\n"
+                    f"Colonne richieste: Time, Timestamp, DateTime, o Date\n"
+                    f"Colonne trovate: {', '.join(self.df.columns)}"
+                )
+
+            # Normalizza a 'Time' per compatibilità con il resto del codice
+            if time_col != 'Time':
+                print(f"  ℹ️  Colonna temporale rilevata: '{time_col}' → rinominata in 'Time'")
+                self.df = self.df.rename(columns={time_col: 'Time'})
+
             # === CARICA CSV 2: PACKED (orario) ===
             self.df_packed = pd.read_csv(self.packed_csv_path)
 
