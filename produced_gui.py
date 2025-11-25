@@ -1112,6 +1112,108 @@ class ProducedGUI:
             lines.append(f"└────────────────────────────────────────────────────────────────────────────┘")
             lines.append(f"")
 
+            # === DETTAGLIO TANK PER TANK ===
+            lines.append("┌─ DETTAGLIO TANK PER TANK ──────────────────────────────────────────────────┐")
+            lines.append("│")
+
+            # Ottieni la riga originale dal DataFrame principale
+            df_row = self.df.iloc[idx]
+
+            # BBT TANKS
+            lines.append("│ 🏭 BBT TANKS (Bright Beer Tanks)")
+            lines.append("│ " + "-" * 76)
+            has_bbt_data = False
+            for tank_num in BBT_TANKS:
+                plato_col = f'BBT {tank_num} Average Plato'
+                level_col = f'BBT{tank_num} Level'
+                material_col = f'BBT{tank_num} Material'
+
+                if all(col in df_row.index for col in [plato_col, level_col, material_col]):
+                    plato = df_row[plato_col]
+                    level = df_row[level_col]
+                    material = df_row[material_col]
+
+                    # Calcola hl_std solo se i valori sono validi
+                    try:
+                        if pd.notna(plato) and pd.notna(level) and pd.notna(material) and level != 0:
+                            hl_std = calc_hl_std(level, plato, material)
+                            has_bbt_data = True
+
+                            # Evidenzia problemi
+                            warning = ""
+                            if material == 0:
+                                warning = " ⚠️ Material=0!"
+                            elif hl_std == 0 and level > 0:
+                                warning = " ⚠️ hl_std=0!"
+
+                            lines.append(f"│   BBT{tank_num}: Plato={plato:5.2f}°  Level={level:8.2f} hl  "
+                                       f"Mat={int(material):2d}  hl_std={hl_std:8.2f}{warning}")
+                    except:
+                        pass
+
+            if not has_bbt_data:
+                lines.append("│   (Nessun dato BBT disponibile)")
+            lines.append("│")
+
+            # FST TANKS
+            lines.append("│ 🍺 FST TANKS (Fermentation Storage Tanks)")
+            lines.append("│ " + "-" * 76)
+            has_fst_data = False
+            for tank_num in FST_TANKS:
+                plato_col = f'FST {tank_num} Average Plato'
+                level_col = f'FST{tank_num} Level '
+                material_col = f'FST{tank_num} Material'
+
+                if all(col in df_row.index for col in [plato_col, level_col, material_col]):
+                    plato = df_row[plato_col]
+                    level = df_row[level_col]
+                    material = df_row[material_col]
+
+                    try:
+                        if pd.notna(plato) and pd.notna(level) and pd.notna(material) and level != 0:
+                            hl_std = calc_hl_std(level, plato, material)
+                            has_fst_data = True
+
+                            # Evidenzia problemi
+                            warning = ""
+                            if material == 0:
+                                warning = " ⚠️ Material=0!"
+                            elif hl_std == 0 and level > 0:
+                                warning = " ⚠️ hl_std=0!"
+
+                            lines.append(f"│   FST{tank_num}: Plato={plato:5.2f}°  Level={level:8.2f} hl  "
+                                       f"Mat={int(material):2d}  hl_std={hl_std:8.2f}{warning}")
+                    except:
+                        pass
+
+            if not has_fst_data:
+                lines.append("│   (Nessun dato FST disponibile)")
+            lines.append("│")
+
+            # RBT TANKS (non hanno Level, solo Plato e Material)
+            lines.append("│ 🔄 RBT TANKS (Return Beer Tanks)")
+            lines.append("│ " + "-" * 76)
+            has_rbt_data = False
+            for tank_num in RBT_TANKS:
+                plato_col = f'RBT {tank_num} Average Plato'
+                material_col = f'RBT{tank_num} Material'
+
+                if all(col in df_row.index for col in [plato_col, material_col]):
+                    plato = df_row[plato_col]
+                    material = df_row[material_col]
+
+                    if pd.notna(plato) and pd.notna(material):
+                        has_rbt_data = True
+                        warning = " ⚠️ Material=0!" if material == 0 else ""
+                        lines.append(f"│   RBT{tank_num}: Plato={plato:5.2f}°  Mat={int(material):2d}{warning}")
+
+            if not has_rbt_data:
+                lines.append("│   (Nessun dato RBT disponibile)")
+
+            lines.append("│")
+            lines.append(f"└────────────────────────────────────────────────────────────────────────────┘")
+            lines.append(f"")
+
             # === VARIAZIONI RISPETTO AL GIORNO PRECEDENTE ===
             if idx > 0:
                 prev_row = self.results_df.iloc[idx - 1]
