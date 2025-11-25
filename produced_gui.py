@@ -3,6 +3,7 @@
 """
 PRODUCED CALCULATOR - GUI Application
 Interfaccia grafica completa per il calcolo Produced
+Modern UX Design with Professional Theme
 """
 
 import tkinter as tk
@@ -24,16 +25,41 @@ import matplotlib.dates as mdates
 from nan_handler import NaNHandler
 from produced_batch import calc_hl_std, plato_to_volumetric, MATERIAL_MAPPING, BBT_TANKS, FST_TANKS, RBT_TANKS
 
+# Import Modern UI Theme
+try:
+    from ui_theme import (COLORS, FONTS, SPACING, configure_ttk_style,
+                          get_icon, get_color, get_font, BUTTON_STYLES)
+except ImportError:
+    # Fallback if theme file is missing
+    COLORS = {}
+    FONTS = {}
+    SPACING = {}
+    get_icon = lambda x: ''
+    get_color = lambda x: '#000000'
+    get_font = lambda s='body', w='normal': ('Arial', 10, w)
+    configure_ttk_style = lambda x: None
+
 # Rilevamento sistema operativo
 IS_WINDOWS = sys.platform.startswith('win')
 IS_LINUX = sys.platform.startswith('linux')
 
 class ProducedGUI:
     def __init__(self, root):
-        """Inizializza l'interfaccia grafica"""
+        """Inizializza l'interfaccia grafica con tema moderno"""
         self.root = root
-        self.root.title("Produced Calculator - Dashboard")
-        self.root.geometry("1200x800")
+        self.root.title("🍺 Produced Calculator - Professional Dashboard")
+        self.root.geometry("1400x900")  # Increased size for better UX
+
+        # Set minimum window size
+        self.root.minsize(1200, 700)
+
+        # Configure root background
+        self.root.configure(bg=get_color('background'))
+
+        # Apply modern theme to ttk widgets
+        self.style = ttk.Style()
+        self.style.theme_use('clam')  # Base theme
+        configure_ttk_style(self.style)  # Apply custom styling
 
         # Variabili di stato
         self.df = None
@@ -49,6 +75,9 @@ class ProducedGUI:
         self.create_menu_bar()
         self.create_main_interface()
         self.create_status_bar()
+
+        # Center window on screen
+        self.center_window()
 
     def create_menu_bar(self):
         """Crea la barra dei menu"""
@@ -120,69 +149,78 @@ class ProducedGUI:
         self.create_settings_tab()
 
     def create_load_tab(self):
-        """Crea il tab per caricare i dati"""
-        # Frame principale
-        main_frame = ttk.Frame(self.tab_load, padding="20")
+        """Crea il tab per caricare i dati con design moderno"""
+        # Frame principale con padding maggiore
+        main_frame = ttk.Frame(self.tab_load, padding=str(SPACING.get('xl', 24)))
         main_frame.pack(fill='both', expand=True)
 
-        # Titolo
-        title = ttk.Label(main_frame, text="Caricamento Dati CSV (Triple Mode)",
-                         font=('Arial', 16, 'bold'))
-        title.pack(pady=10)
+        # Titolo con icona e stile moderno
+        title = ttk.Label(main_frame,
+                         text=f"{get_icon('upload')} Caricamento Dati CSV (Triple Mode)",
+                         style='Title.TLabel')
+        title.pack(pady=(0, SPACING.get('sm', 8)))
 
-        # Sottotitolo esplicativo
+        # Sottotitolo esplicativo con stile secondario
         subtitle = ttk.Label(main_frame,
-                            text="Carica 3 file: Stock (giornaliero) + Packed (orario) + Cisterne (orario)",
-                            font=('Arial', 9, 'italic'),
-                            foreground='gray')
-        subtitle.pack(pady=5)
+                            text="📊 Carica 3 file: Stock (giornaliero) + Packed (orario) + Cisterne (orario)",
+                            style='Subtitle.TLabel')
+        subtitle.pack(pady=(0, SPACING.get('lg', 16)))
 
         # Frame selezione file 1 - STOCK ONLY
-        file_frame1 = ttk.LabelFrame(main_frame, text="1️⃣ CSV Stock Tanks (giornaliero)", padding="10")
-        file_frame1.pack(fill='x', pady=10)
+        file_frame1 = ttk.LabelFrame(main_frame, text=f"{get_icon('file')} 1️⃣ CSV Stock Tanks (giornaliero)",
+                                     padding=str(SPACING.get('md', 12)))
+        file_frame1.pack(fill='x', pady=SPACING.get('sm', 8))
 
         self.csv_path_var = tk.StringVar(value="Nessun file selezionato")
         path_label1 = ttk.Label(file_frame1, textvariable=self.csv_path_var,
-                              foreground='gray')
-        path_label1.pack(side='left', padx=5)
+                              foreground=get_color('text_secondary'))
+        path_label1.pack(side='left', padx=SPACING.get('sm', 8), fill='x', expand=True)
 
-        browse_btn1 = ttk.Button(file_frame1, text="Sfoglia...",
+        browse_btn1 = ttk.Button(file_frame1, text=f"{get_icon('folder')} Sfoglia...",
                                command=self.browse_csv)
-        browse_btn1.pack(side='right', padx=5)
+        browse_btn1.pack(side='right', padx=SPACING.get('sm', 8))
 
         # Frame selezione file 2 - PACKED (OBBLIGATORIO)
-        file_frame2 = ttk.LabelFrame(main_frame, text="2️⃣ CSV Packed (orario) ⚠️ OBBLIGATORIO", padding="10")
-        file_frame2.pack(fill='x', pady=10)
+        file_frame2 = ttk.LabelFrame(main_frame, text=f"{get_icon('package')} 2️⃣ CSV Packed (orario) {get_icon('warning')} OBBLIGATORIO",
+                                     padding=str(SPACING.get('md', 12)))
+        file_frame2.pack(fill='x', pady=SPACING.get('sm', 8))
 
         self.packed_csv_path_var = tk.StringVar(value="Nessun file selezionato")
         path_label2 = ttk.Label(file_frame2, textvariable=self.packed_csv_path_var,
-                              foreground='gray', wraplength=800)
-        path_label2.pack(side='left', padx=5)
+                              foreground=get_color('text_secondary'), wraplength=800)
+        path_label2.pack(side='left', padx=SPACING.get('sm', 8), fill='x', expand=True)
 
-        browse_btn2 = ttk.Button(file_frame2, text="Sfoglia...",
+        browse_btn2 = ttk.Button(file_frame2, text=f"{get_icon('folder')} Sfoglia...",
                                command=self.browse_packed_csv)
-        browse_btn2.pack(side='right', padx=5)
+        browse_btn2.pack(side='right', padx=SPACING.get('sm', 8))
 
         # Frame selezione file 3 - CISTERNE (OBBLIGATORIO)
-        file_frame3 = ttk.LabelFrame(main_frame, text="3️⃣ CSV Cisterne (orario) ⚠️ OBBLIGATORIO", padding="10")
-        file_frame3.pack(fill='x', pady=10)
+        file_frame3 = ttk.LabelFrame(main_frame, text=f"{get_icon('truck')} 3️⃣ CSV Cisterne (orario) {get_icon('warning')} OBBLIGATORIO",
+                                     padding=str(SPACING.get('md', 12)))
+        file_frame3.pack(fill='x', pady=SPACING.get('sm', 8))
 
         self.cisterne_csv_path_var = tk.StringVar(value="Nessun file selezionato")
         path_label3 = ttk.Label(file_frame3, textvariable=self.cisterne_csv_path_var,
-                              foreground='gray', wraplength=800)
-        path_label3.pack(side='left', padx=5)
+                              foreground=get_color('text_secondary'), wraplength=800)
+        path_label3.pack(side='left', padx=SPACING.get('sm', 8), fill='x', expand=True)
 
-        browse_btn3 = ttk.Button(file_frame3, text="Sfoglia...",
+        browse_btn3 = ttk.Button(file_frame3, text=f"{get_icon('folder')} Sfoglia...",
                                command=self.browse_cisterne_csv)
-        browse_btn3.pack(side='right', padx=5)
+        browse_btn3.pack(side='right', padx=SPACING.get('sm', 8))
 
         # Frame info dati caricati
-        self.info_frame = ttk.LabelFrame(main_frame, text="Informazioni Dati", padding="10")
-        self.info_frame.pack(fill='both', expand=True, pady=10)
+        self.info_frame = ttk.LabelFrame(main_frame,
+                                         text=f"{get_icon('info')} Informazioni Dati",
+                                         padding=str(SPACING.get('md', 12)))
+        self.info_frame.pack(fill='both', expand=True, pady=SPACING.get('sm', 8))
 
         self.info_text = tk.Text(self.info_frame, height=15, state='disabled',
-                                font=('Courier', 10))
-        self.info_text.pack(fill='both', expand=True)
+                                font=get_font('body', 'normal'),
+                                bg=get_color('surface'),
+                                fg=get_color('text_primary'),
+                                relief='flat',
+                                borderwidth=0)
+        self.info_text.pack(fill='both', expand=True, padx=SPACING.get('sm', 8), pady=SPACING.get('sm', 8))
 
         # Scrollbar per info
         scrollbar = ttk.Scrollbar(self.info_frame, command=self.info_text.yview)
@@ -191,16 +229,18 @@ class ProducedGUI:
 
         # Bottoni azione
         action_frame = ttk.Frame(main_frame)
-        action_frame.pack(fill='x', pady=10)
+        action_frame.pack(fill='x', pady=SPACING.get('lg', 16))
 
-        load_btn = ttk.Button(action_frame, text="Carica e Analizza",
+        load_btn = ttk.Button(action_frame,
+                             text=f"{get_icon('analytics')} Carica e Analizza",
                              command=self.load_and_analyze,
                              style='Accent.TButton')
-        load_btn.pack(side='left', padx=5)
+        load_btn.pack(side='left', padx=SPACING.get('sm', 8))
 
-        clear_btn = ttk.Button(action_frame, text="Pulisci",
+        clear_btn = ttk.Button(action_frame,
+                              text=f"{get_icon('close')} Pulisci",
                               command=self.clear_data)
-        clear_btn.pack(side='left', padx=5)
+        clear_btn.pack(side='left', padx=SPACING.get('sm', 8))
 
     def create_dashboard_tab(self):
         """Crea il tab dashboard con risultati"""
@@ -1900,10 +1940,24 @@ class ProducedGUI:
     def show_about(self):
         """Mostra informazioni sull'app"""
         messagebox.showinfo("About",
-                           "Produced Calculator GUI\n"
-                           "Versione 2.0\n\n"
+                           "🍺 Produced Calculator GUI\n"
+                           "Versione 2.0 - Modern UX Edition\n\n"
                            "Sistema di calcolo Produced con interfaccia grafica.\n\n"
+                           "Features:\n"
+                           "• Triple CSV Architecture\n"
+                           "• Real-time Analysis\n"
+                           "• Interactive Charts\n"
+                           "• PDF Export\n\n"
                            "Sviluppato con Python + tkinter")
+
+    def center_window(self):
+        """Center the window on screen"""
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
 
 
 def main():
