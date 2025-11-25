@@ -1128,16 +1128,24 @@ class ProducedGUI:
                 level_col = f'BBT{tank_num} Level'
                 material_col = f'BBT{tank_num} Material'
 
+                # Verifica se le colonne esistono
                 if all(col in df_row.index for col in [plato_col, level_col, material_col]):
                     plato = df_row[plato_col]
                     level = df_row[level_col]
                     material = df_row[material_col]
 
-                    # Calcola hl_std solo se i valori sono validi
-                    try:
-                        if pd.notna(plato) and pd.notna(level) and pd.notna(material) and level != 0:
+                    # Mostra SEMPRE il tank, anche se vuoto o con dati mancanti
+                    has_bbt_data = True
+
+                    # Gestisci dati mancanti o vuoti
+                    if pd.isna(plato) or pd.isna(level) or pd.isna(material):
+                        lines.append(f"│   BBT{tank_num}: (no data)")
+                    elif level == 0:
+                        lines.append(f"│   BBT{tank_num}: (vuoto) Level=0")
+                    else:
+                        # Calcola hl_std
+                        try:
                             hl_std = calc_hl_std(level, plato, material)
-                            has_bbt_data = True
 
                             # Evidenzia problemi
                             warning = ""
@@ -1148,8 +1156,8 @@ class ProducedGUI:
 
                             lines.append(f"│   BBT{tank_num}: Plato={plato:5.2f}°  Level={level:8.2f} hl  "
                                        f"Mat={int(material):2d}  hl_std={hl_std:8.2f}{warning}")
-                    except:
-                        pass
+                        except Exception as e:
+                            lines.append(f"│   BBT{tank_num}: ❌ Errore calcolo: {str(e)}")
 
             if not has_bbt_data:
                 lines.append("│   (Nessun dato BBT disponibile)")
@@ -1164,15 +1172,24 @@ class ProducedGUI:
                 level_col = f'FST{tank_num} Level '
                 material_col = f'FST{tank_num} Material'
 
+                # Verifica se le colonne esistono
                 if all(col in df_row.index for col in [plato_col, level_col, material_col]):
                     plato = df_row[plato_col]
                     level = df_row[level_col]
                     material = df_row[material_col]
 
-                    try:
-                        if pd.notna(plato) and pd.notna(level) and pd.notna(material) and level != 0:
+                    # Mostra SEMPRE il tank, anche se vuoto o con dati mancanti
+                    has_fst_data = True
+
+                    # Gestisci dati mancanti o vuoti
+                    if pd.isna(plato) or pd.isna(level) or pd.isna(material):
+                        lines.append(f"│   FST{tank_num}: (no data)")
+                    elif level == 0:
+                        lines.append(f"│   FST{tank_num}: (vuoto) Level=0")
+                    else:
+                        # Calcola hl_std
+                        try:
                             hl_std = calc_hl_std(level, plato, material)
-                            has_fst_data = True
 
                             # Evidenzia problemi
                             warning = ""
@@ -1183,8 +1200,8 @@ class ProducedGUI:
 
                             lines.append(f"│   FST{tank_num}: Plato={plato:5.2f}°  Level={level:8.2f} hl  "
                                        f"Mat={int(material):2d}  hl_std={hl_std:8.2f}{warning}")
-                    except:
-                        pass
+                        except Exception as e:
+                            lines.append(f"│   FST{tank_num}: ❌ Errore calcolo: {str(e)}")
 
             if not has_fst_data:
                 lines.append("│   (Nessun dato FST disponibile)")
@@ -1198,12 +1215,18 @@ class ProducedGUI:
                 plato_col = f'RBT {tank_num} Average Plato'
                 material_col = f'RBT{tank_num} Material'
 
+                # Verifica se le colonne esistono
                 if all(col in df_row.index for col in [plato_col, material_col]):
                     plato = df_row[plato_col]
                     material = df_row[material_col]
 
-                    if pd.notna(plato) and pd.notna(material):
-                        has_rbt_data = True
+                    # Mostra SEMPRE il tank
+                    has_rbt_data = True
+
+                    # Gestisci dati mancanti
+                    if pd.isna(plato) or pd.isna(material):
+                        lines.append(f"│   RBT{tank_num}: (no data)")
+                    else:
                         warning = " ⚠️ Material=0!" if material == 0 else ""
                         lines.append(f"│   RBT{tank_num}: Plato={plato:5.2f}°  Mat={int(material):2d}{warning}")
 
