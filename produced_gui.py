@@ -470,7 +470,24 @@ class ProducedGUI:
         for material_id, grado in sorted(MATERIAL_MAPPING.items()):
             self.mapping_tree.insert('', 'end', values=(material_id, f"{grado:.2f}"))
 
-        self.mapping_tree.pack(fill='both', expand=True)
+        self.mapping_tree.pack(fill='both', expand=True, pady=(0, 10))
+
+        # Pulsanti per gestire i materiali
+        button_frame = ttk.Frame(mapping_frame)
+        button_frame.pack(fill='x')
+
+        ttk.Button(button_frame, text="Aggiungi Materiale",
+                  command=self.add_material).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Modifica Selezionato",
+                  command=self.edit_material).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Elimina Selezionato",
+                  command=self.delete_material).pack(side='left', padx=5)
+
+        # Info
+        info_label = ttk.Label(mapping_frame,
+                              text="Nota: Le modifiche sono temporanee per questa sessione",
+                              foreground='gray')
+        info_label.pack(pady=5)
 
     def create_status_bar(self):
         """Crea la barra di stato"""
@@ -503,6 +520,145 @@ class ProducedGUI:
         self.info_text.delete('1.0', 'end')
         self.info_text.insert('1.0', text)
         self.info_text.config(state='disabled')
+
+    def add_material(self):
+        """Aggiunge un nuovo materiale al mapping"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Aggiungi Materiale")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="Aggiungi nuovo materiale",
+                 font=('Arial', 12, 'bold')).pack(pady=10)
+
+        # Frame per input
+        input_frame = ttk.Frame(dialog, padding="10")
+        input_frame.pack(fill='both', expand=True)
+
+        ttk.Label(input_frame, text="Material ID (numero intero):").grid(row=0, column=0, sticky='w', pady=5)
+        material_id_var = tk.StringVar()
+        material_id_entry = ttk.Entry(input_frame, textvariable=material_id_var, width=20)
+        material_id_entry.grid(row=0, column=1, pady=5, padx=5)
+
+        ttk.Label(input_frame, text="Grado Standard (es: 11.57):").grid(row=1, column=0, sticky='w', pady=5)
+        grado_var = tk.StringVar()
+        grado_entry = ttk.Entry(input_frame, textvariable=grado_var, width=20)
+        grado_entry.grid(row=1, column=1, pady=5, padx=5)
+
+        def save_material():
+            try:
+                material_id = int(material_id_var.get())
+                grado = float(grado_var.get())
+
+                if material_id in MATERIAL_MAPPING:
+                    messagebox.showwarning("Attenzione",
+                                         f"Material ID {material_id} esiste già!\n"
+                                         f"Usa 'Modifica' per cambiarlo.")
+                    return
+
+                # Aggiungi al mapping
+                MATERIAL_MAPPING[material_id] = grado
+
+                # Aggiorna TreeView
+                self.refresh_material_tree()
+
+                messagebox.showinfo("Successo",
+                                  f"Material {material_id} aggiunto con grado {grado:.2f}")
+                dialog.destroy()
+
+            except ValueError as e:
+                messagebox.showerror("Errore",
+                                   f"Valori non validi!\n\n"
+                                   f"Material ID deve essere un numero intero.\n"
+                                   f"Grado deve essere un numero decimale.\n\n"
+                                   f"Errore: {str(e)}")
+
+        # Pulsanti
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=10)
+        ttk.Button(button_frame, text="Salva", command=save_material).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Annulla", command=dialog.destroy).pack(side='left', padx=5)
+
+    def edit_material(self):
+        """Modifica il materiale selezionato"""
+        selection = self.mapping_tree.selection()
+        if not selection:
+            messagebox.showwarning("Attenzione", "Seleziona un materiale da modificare")
+            return
+
+        item = self.mapping_tree.item(selection[0])
+        current_id = int(item['values'][0])
+        current_grado = float(item['values'][1])
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Modifica Materiale")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text=f"Modifica Material ID {current_id}",
+                 font=('Arial', 12, 'bold')).pack(pady=10)
+
+        # Frame per input
+        input_frame = ttk.Frame(dialog, padding="10")
+        input_frame.pack(fill='both', expand=True)
+
+        ttk.Label(input_frame, text="Material ID:").grid(row=0, column=0, sticky='w', pady=5)
+        ttk.Label(input_frame, text=str(current_id), font=('Arial', 10, 'bold')).grid(row=0, column=1, sticky='w', pady=5)
+
+        ttk.Label(input_frame, text="Nuovo Grado Standard:").grid(row=1, column=0, sticky='w', pady=5)
+        grado_var = tk.StringVar(value=str(current_grado))
+        grado_entry = ttk.Entry(input_frame, textvariable=grado_var, width=20)
+        grado_entry.grid(row=1, column=1, pady=5, padx=5)
+
+        def save_changes():
+            try:
+                new_grado = float(grado_var.get())
+                MATERIAL_MAPPING[current_id] = new_grado
+                self.refresh_material_tree()
+                messagebox.showinfo("Successo",
+                                  f"Material {current_id} aggiornato a {new_grado:.2f}")
+                dialog.destroy()
+            except ValueError as e:
+                messagebox.showerror("Errore",
+                                   f"Valore non valido!\n\n"
+                                   f"Grado deve essere un numero decimale.\n\n"
+                                   f"Errore: {str(e)}")
+
+        # Pulsanti
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=10)
+        ttk.Button(button_frame, text="Salva", command=save_changes).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Annulla", command=dialog.destroy).pack(side='left', padx=5)
+
+    def delete_material(self):
+        """Elimina il materiale selezionato"""
+        selection = self.mapping_tree.selection()
+        if not selection:
+            messagebox.showwarning("Attenzione", "Seleziona un materiale da eliminare")
+            return
+
+        item = self.mapping_tree.item(selection[0])
+        material_id = int(item['values'][0])
+
+        result = messagebox.askyesno("Conferma",
+                                    f"Eliminare Material ID {material_id}?\n\n"
+                                    f"Questa operazione è permanente per questa sessione.")
+        if result:
+            del MATERIAL_MAPPING[material_id]
+            self.refresh_material_tree()
+            messagebox.showinfo("Successo", f"Material {material_id} eliminato")
+
+    def refresh_material_tree(self):
+        """Aggiorna il TreeView con il mapping corrente"""
+        # Cancella tutto
+        for item in self.mapping_tree.get_children():
+            self.mapping_tree.delete(item)
+
+        # Ripopola
+        for material_id, grado in sorted(MATERIAL_MAPPING.items()):
+            self.mapping_tree.insert('', 'end', values=(material_id, f"{grado:.2f}"))
 
     # ============== FUNZIONI PRINCIPALI ==============
 
@@ -609,15 +765,18 @@ class ProducedGUI:
             handler = NaNHandler(self.df)
             missing_report = handler.detect_missing_values()
 
+            # Conta giorni effettivamente utilizzati (basati su Stock)
+            giorni_finali = len(self.df)
+
             # Mostra info
             info = f"✅ CSV Stock Tanks: {os.path.basename(self.csv_path)}\n"
             info += f"   Righe: {len(self.df)}\n\n"
             info += f"✅ CSV Packed (orario): {os.path.basename(self.packed_csv_path)}\n"
             info += f"   Righe orarie: {len(self.df_packed)}\n"
-            info += f"   Giorni aggregati: {len(packed_daily)}\n\n"
+            info += f"   Giorni nel file: {len(packed_daily)} → Giorni utilizzati: {giorni_finali}\n\n"
             info += f"✅ CSV Cisterne (orario): {os.path.basename(self.cisterne_csv_path)}\n"
             info += f"   Righe orarie: {len(self.df_cisterne)}\n"
-            info += f"   Giorni aggregati: {len(cisterne_daily)}\n\n"
+            info += f"   Giorni nel file: {len(cisterne_daily)} → Giorni utilizzati: {giorni_finali}\n\n"
 
             if missing_report:
                 info += f"⚠️ ATTENZIONE: Rilevati {len(missing_report)} valori NaN!\n\n"
@@ -940,7 +1099,13 @@ class ProducedGUI:
                     'Data': row['Time'],
                     'Produced': produced,
                     'Packed': packed_total,
+                    'Packed OW1': packed_ow1,
+                    'Packed RGB': packed_rgb,
+                    'Packed OW2': packed_ow2,
+                    'Packed KEG': packed_keg,
                     'Cisterne': cisterne_total,
+                    'Truck1_hl_std': truck1_hl_std,
+                    'Truck2_hl_std': truck2_hl_std,
                     'Stock_Iniziale': stock_iniziale,
                     'Stock_Finale': stock_finale,
                     'Delta_Stock': delta_stock
