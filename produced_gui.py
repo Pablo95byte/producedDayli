@@ -1890,8 +1890,8 @@ class ProducedGUI:
             if event.inaxes == ax:
                 # Trova la barra più vicina al cursore (funziona anche con valori negativi)
                 if event.xdata is not None:
-                    # Converti xdata in datetime
-                    mouse_date = mdates.num2date(event.xdata)
+                    # Converti xdata in datetime naive (rimuovi timezone)
+                    mouse_date = mdates.num2date(event.xdata).replace(tzinfo=None)
 
                     # Trova l'indice della data più vicina
                     dates_list = pd.to_datetime(dates).tolist()
@@ -1993,8 +1993,8 @@ class ProducedGUI:
             if event.inaxes == ax:
                 # Invece di usare bar.contains(), trova la data più vicina al cursore
                 if event.xdata is not None:
-                    # Converti xdata (timestamp matplotlib) in datetime
-                    mouse_date = mdates.num2date(event.xdata)
+                    # Converti xdata in datetime naive (rimuovi timezone)
+                    mouse_date = mdates.num2date(event.xdata).replace(tzinfo=None)
 
                     # Trova l'indice della data più vicina
                     dates_list = pd.to_datetime(dates).tolist()
@@ -2100,7 +2100,8 @@ class ProducedGUI:
             if event.inaxes == ax:
                 # Trova la data più vicina al cursore
                 if event.xdata is not None:
-                    mouse_date = mdates.num2date(event.xdata)
+                    # Converti xdata in datetime naive (rimuovi timezone)
+                    mouse_date = mdates.num2date(event.xdata).replace(tzinfo=None)
 
                     # Trova l'indice della data più vicina
                     dates_list = pd.to_datetime(dates).tolist()
