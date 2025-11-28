@@ -1888,16 +1888,34 @@ class ProducedGUI:
         def hover(event):
             """Gestisce evento hover del mouse"""
             if event.inaxes == ax:
-                # Trova la barra sotto il cursore
-                for i, (bar, date, val) in enumerate(zip(bars, dates, values)):
-                    if bar.contains(event)[0]:
-                        # Aggiorna posizione e testo dell'annotazione
-                        x = bar.get_x() + bar.get_width() / 2
-                        y = bar.get_height()
+                # Trova la barra più vicina al cursore (funziona anche con valori negativi)
+                if event.xdata is not None:
+                    # Converti xdata in datetime
+                    mouse_date = mdates.num2date(event.xdata)
+
+                    # Trova l'indice della data più vicina
+                    dates_list = pd.to_datetime(dates).tolist()
+                    distances = [abs((d - mouse_date).total_seconds()) for d in dates_list]
+                    min_idx = distances.index(min(distances))
+
+                    # Controlla se siamo abbastanza vicini
+                    bar = bars[min_idx]
+                    bar_center_x = bar.get_x() + bar.get_width() / 2
+                    mouse_x = event.xdata
+                    bar_width = bar.get_width()
+
+                    if abs(mouse_x - bar_center_x) < bar_width:
+                        # Siamo sopra questa barra!
+                        i = min_idx
+                        x = bar_center_x
+                        y = values.iloc[i] if hasattr(values, 'iloc') else values[i]
+
                         annot.xy = (x, y)
 
                         # Formatta data
+                        date = dates.iloc[i] if hasattr(dates, 'iloc') else dates[i]
                         date_str = pd.to_datetime(date).strftime('%d-%m-%Y')
+                        val = values.iloc[i] if hasattr(values, 'iloc') else values[i]
                         text = f"{date_str}\n{label}: {val:.2f} hl"
                         annot.set_text(text)
                         annot.set_visible(True)
@@ -1925,23 +1943,36 @@ class ProducedGUI:
         def hover(event):
             """Gestisce evento hover del mouse"""
             if event.inaxes == ax:
-                for i, bar in enumerate(bars):
-                    if bar.contains(event)[0]:
-                        x = bar.get_x() + bar.get_width() / 2
-                        y = bar.get_height()
-                        annot.xy = (x, y)
+                # Per grafici settimanali (coordinate X discrete), trova la barra più vicina
+                if event.xdata is not None:
+                    # Trova l'indice della barra più vicina
+                    min_idx = round(event.xdata)
 
-                        # Dati settimana
-                        week = weekly_data.iloc[i]
-                        text = f"{week['Week_Year']}\n"
-                        text += f"Totale: {week['Total']:.2f} hl\n"
-                        text += f"Media: {week['Mean']:.2f} hl/giorno\n"
-                        text += f"Giorni: {int(week['Days'])}"
+                    # Controlla che sia un indice valido
+                    if 0 <= min_idx < len(bars):
+                        bar = bars[min_idx]
+                        bar_center_x = bar.get_x() + bar.get_width() / 2
+                        mouse_x = event.xdata
+                        bar_width = bar.get_width()
 
-                        annot.set_text(text)
-                        annot.set_visible(True)
-                        self.canvas.draw_idle()
-                        return
+                        # Controlla se siamo abbastanza vicini
+                        if abs(mouse_x - bar_center_x) < bar_width:
+                            i = min_idx
+                            x = bar_center_x
+                            y = weekly_data.iloc[i]['Total']
+                            annot.xy = (x, y)
+
+                            # Dati settimana
+                            week = weekly_data.iloc[i]
+                            text = f"{week['Week_Year']}\n"
+                            text += f"Totale: {week['Total']:.2f} hl\n"
+                            text += f"Media: {week['Mean']:.2f} hl/giorno\n"
+                            text += f"Giorni: {int(week['Days'])}"
+
+                            annot.set_text(text)
+                            annot.set_visible(True)
+                            self.canvas.draw_idle()
+                            return
 
                 if annot.get_visible():
                     annot.set_visible(False)
@@ -1960,14 +1991,33 @@ class ProducedGUI:
 
         def hover(event):
             if event.inaxes == ax:
-                for i, bar in enumerate(bars):
-                    if bar.contains(event)[0]:
-                        x = bar.get_x() + bar.get_width() / 2
-                        y = self.results_df.iloc[i]['Produced']  # Top della barra totale
+                # Invece di usare bar.contains(), trova la data più vicina al cursore
+                if event.xdata is not None:
+                    # Converti xdata (timestamp matplotlib) in datetime
+                    mouse_date = mdates.num2date(event.xdata)
+
+                    # Trova l'indice della data più vicina
+                    dates_list = pd.to_datetime(dates).tolist()
+                    distances = [abs((d - mouse_date).total_seconds()) for d in dates_list]
+                    min_idx = distances.index(min(distances))
+
+                    # Controlla se siamo abbastanza vicini (entro metà della larghezza di una barra)
+                    bar = bars[min_idx]
+                    bar_center_x = bar.get_x() + bar.get_width() / 2
+                    mouse_x = event.xdata
+                    bar_width = bar.get_width()
+
+                    if abs(mouse_x - bar_center_x) < bar_width:
+                        # Siamo sopra questa barra!
+                        i = min_idx
+                        x = bar_center_x
+
+                        # Posiziona il tooltip sopra il valore massimo (gestisce anche negativi)
+                        row = self.results_df.iloc[i]
+                        y = row['Produced']
                         annot.xy = (x, y)
 
                         # Dati componenti
-                        row = self.results_df.iloc[i]
                         date_str = pd.to_datetime(row['Data']).strftime('%d-%m-%Y')
 
                         packed = row['Packed']
@@ -1985,7 +2035,7 @@ class ProducedGUI:
                         text += f"━━━━━━━━━━━━━━━━━━━\n"
                         text += f"Packed:       {packed:8.2f} hl ({perc(packed):5.1f}%)\n"
                         text += f"Cisterne/2:   {cisterne:8.2f} hl ({perc(cisterne):5.1f}%)\n"
-                        text += f"ΔStock/2:     {delta_stock:8.2f} hl ({perc(delta_stock):5.1f}%)"
+                        text += f"ΔStock/2:     {delta_stock:8.2f} hl ({perc(abs(delta_stock)):5.1f}%)"
 
                         annot.set_text(text)
                         annot.set_visible(True)
@@ -2048,9 +2098,24 @@ class ProducedGUI:
 
         def hover(event):
             if event.inaxes == ax:
-                for i, bar in enumerate(bars):
-                    if bar.contains(event)[0]:
-                        x = bar.get_x() + bar.get_width() / 2
+                # Trova la data più vicina al cursore
+                if event.xdata is not None:
+                    mouse_date = mdates.num2date(event.xdata)
+
+                    # Trova l'indice della data più vicina
+                    dates_list = pd.to_datetime(dates).tolist()
+                    distances = [abs((d - mouse_date).total_seconds()) for d in dates_list]
+                    min_idx = distances.index(min(distances))
+
+                    # Controlla se siamo abbastanza vicini
+                    bar = bars[min_idx]
+                    bar_center_x = bar.get_x() + bar.get_width() / 2
+                    mouse_x = event.xdata
+                    bar_width = bar.get_width()
+
+                    if abs(mouse_x - bar_center_x) < bar_width:
+                        i = min_idx
+                        x = bar_center_x
                         y = ow1.iloc[i] + rgb.iloc[i] + ow2.iloc[i] + keg.iloc[i]
                         annot.xy = (x, y)
 
